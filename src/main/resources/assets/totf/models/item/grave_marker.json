@@ -1,0 +1,6 @@
+{
+  "parent": "totf:block/grave_marker",
+  "textures": {
+    "layer0": "totf:blocks/grave_marker"
+  }
+}

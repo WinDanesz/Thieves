@@ -1,0 +1,26 @@
+{
+  "display": {
+    "icon": {
+      "item": "minecraft:chest"
+    },
+    "title": {
+      "translate": "advancements.totf.root.title"
+    },
+    "description": {
+      "translate": "advancements.totf.root.description"
+    },
+    "background": "minecraft:textures/gui/advancements/backgrounds/stone.png",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "crafting_table": {
+      "trigger": "minecraft:inventory_changed",
+      "criteria": {
+        "tick": {
+          "trigger": "minecraft:tick"
+        }
+      }
+    }
+  }
+}

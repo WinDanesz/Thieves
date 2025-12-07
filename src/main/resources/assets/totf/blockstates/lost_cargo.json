@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,snowy=false": { "model": "totf:lost_cargo" },
+    "facing=east,snowy=false":  { "model": "totf:lost_cargo", "y": 90 },
+    "facing=south,snowy=false": { "model": "totf:lost_cargo", "y": 180 },
+    "facing=west,snowy=false":  { "model": "totf:lost_cargo", "y": 270 },
+    "facing=north,snowy=true": { "model": "totf:lost_cargo_snowy" },
+    "facing=east,snowy=true":  { "model": "totf:lost_cargo_snowy", "y": 90 },
+    "facing=south,snowy=true": { "model": "totf:lost_cargo_snowy", "y": 180 },
+    "facing=west,snowy=true":  { "model": "totf:lost_cargo_snowy", "y": 270 }
+  }
+}

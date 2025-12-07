@@ -1,0 +1,30 @@
+{
+  "display": {
+    "icon": {
+      "item": "totf:grave_rose"
+    },
+    "title": {
+      "translate": "advancements.totf.acquire_grave_rose.title"
+    },
+    "description": {
+      "translate": "advancements.totf.acquire_grave_rose.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": true
+  },
+  "parent": "totf:flower_on_grave",
+  "criteria": {
+    "has_grave_rose": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "item": "totf:grave_rose"
+          }
+        ]
+      }
+    }
+  }
+}

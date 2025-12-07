@@ -1,0 +1,6 @@
+{
+  "parent": "totf:block/bush_crate",
+  "textures": {
+    "layer0": "totf:blocks/bush_crate"
+  }
+}

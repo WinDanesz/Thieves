@@ -1,0 +1,6 @@
+{
+  "parent": "totf:block/tent",
+  "textures": {
+    "layer0": "totf:blocks/tent"
+  }
+}

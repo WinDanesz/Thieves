@@ -1,0 +1,6 @@
+{
+  "parent": "totf:block/lost_cargo",
+  "textures": {
+    "layer0": "totf:blocks/lost_cargo"
+  }
+}

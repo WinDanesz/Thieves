@@ -1,0 +1,6 @@
+{
+  "parent": "totf:block/skeleton_crate",
+  "textures": {
+    "layer0": "totf:blocks/skeleton_crate"
+  }
+}

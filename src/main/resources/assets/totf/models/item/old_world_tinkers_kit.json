@@ -1,0 +1,6 @@
+{
+    "parent": "item/handheld",
+    "textures": {
+        "layer0": "totf:items/old_world_tinkers_kit"
+    }
+}

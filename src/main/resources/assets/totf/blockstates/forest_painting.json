@@ -1,0 +1,11 @@
+{
+    "variants": {
+        "facing=north": { "model": "totf:block/forest_painting" },
+        "facing=south": { "model": "totf:block/forest_painting", "y": 180 },
+        "facing=west":  { "model": "totf:block/forest_painting", "y": 270 },
+        "facing=east":  { "model": "totf:block/forest_painting", "y": 90 },
+        "inventory": {
+            "model": "totf:item/forest_painting"
+        }
+    }
+}

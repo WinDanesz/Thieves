@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,snowy=false": { "model": "totf:skeleton_crate" },
+    "facing=east,snowy=false":  { "model": "totf:skeleton_crate", "y": 90 },
+    "facing=south,snowy=false": { "model": "totf:skeleton_crate", "y": 180 },
+    "facing=west,snowy=false":  { "model": "totf:skeleton_crate", "y": 270 },
+    "facing=north,snowy=true": { "model": "totf:skeleton_crate_snowy" },
+    "facing=east,snowy=true":  { "model": "totf:skeleton_crate_snowy", "y": 90 },
+    "facing=south,snowy=true": { "model": "totf:skeleton_crate_snowy", "y": 180 },
+    "facing=west,snowy=true":  { "model": "totf:skeleton_crate_snowy", "y": 270 }
+  }
+}

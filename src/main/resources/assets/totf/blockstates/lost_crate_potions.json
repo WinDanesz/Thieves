@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=north,snowy=false": { "model": "totf:lost_crate_potions" },
+    "facing=east,snowy=false":  { "model": "totf:lost_crate_potions", "y": 90 },
+    "facing=south,snowy=false": { "model": "totf:lost_crate_potions", "y": 180 },
+    "facing=west,snowy=false":  { "model": "totf:lost_crate_potions", "y": 270 },
+    "facing=north,snowy=true": { "model": "totf:lost_crate_potions" },
+    "facing=east,snowy=true":  { "model": "totf:lost_crate_potions", "y": 90 },
+    "facing=south,snowy=true": { "model": "totf:lost_crate_potions", "y": 180 },
+    "facing=west,snowy=true":  { "model": "totf:lost_crate_potions", "y": 270 }
+  }
+}

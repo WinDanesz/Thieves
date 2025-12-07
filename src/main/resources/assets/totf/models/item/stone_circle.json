@@ -1,0 +1,6 @@
+{
+  "parent": "totf:block/stone_circle",
+  "textures": {
+    "layer0": "totf:blocks/stone_circle"
+  }
+}

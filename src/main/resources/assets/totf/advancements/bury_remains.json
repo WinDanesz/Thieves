@@ -1,0 +1,23 @@
+{
+  "display": {
+    "icon": {
+      "item": "minecraft:iron_shovel"
+    },
+    "title": {
+      "translate": "advancements.totf.bury_remains.title"
+    },
+    "description": {
+      "translate": "advancements.totf.bury_remains.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": true
+  },
+  "parent": "totf:root",
+  "criteria": {
+    "bury_remains": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

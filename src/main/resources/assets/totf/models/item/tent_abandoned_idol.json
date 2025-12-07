@@ -1,0 +1,6 @@
+{
+  "parent": "totf:block/tent_abandoned_idol",
+  "textures": {
+    "layer0": "totf:blocks/tent"
+  }
+}

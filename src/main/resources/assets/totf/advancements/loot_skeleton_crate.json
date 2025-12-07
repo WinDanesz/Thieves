@@ -1,0 +1,23 @@
+{
+  "display": {
+    "icon": {
+      "item": "minecraft:bone"
+    },
+    "title": {
+      "translate": "advancements.totf.loot_skeleton_crate.title"
+    },
+    "description": {
+      "translate": "advancements.totf.loot_skeleton_crate.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": true
+  },
+  "parent": "totf:root",
+  "criteria": {
+    "loot_skeleton_crate": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}
