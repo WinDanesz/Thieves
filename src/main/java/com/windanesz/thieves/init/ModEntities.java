@@ -28,7 +28,7 @@ public class ModEntities {
 
 		IForgeRegistry<EntityEntry> registry = event.getRegistry();
 
-		// projectile entities
+
 		registry.register(createEntry(EntityThief.class, "thief", TrackingType.LIVING).egg(0xeb42ff, 0x6aeba6).build());
 	}
 

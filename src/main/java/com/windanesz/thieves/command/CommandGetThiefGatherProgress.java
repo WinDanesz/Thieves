@@ -14,7 +14,7 @@ import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
 
-public class CommandGetHauntingProgress extends CommandBase {
+public class CommandGetThiefGatherProgress extends CommandBase {
 
 	@Nonnull
 	@Override

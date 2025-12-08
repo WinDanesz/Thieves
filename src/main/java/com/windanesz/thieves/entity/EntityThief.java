@@ -37,7 +37,7 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 
 	public EntityThief(World worldIn) {
 		super(worldIn);
-		this.setSize(0.6F, 1F);
+		this.setSize(0.5F, 1.8F);
 		this.setCanPickUpLoot(true);
 	}
 
