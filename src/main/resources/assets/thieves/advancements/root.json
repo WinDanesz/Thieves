@@ -4,10 +4,10 @@
       "item": "minecraft:chest"
     },
     "title": {
-      "translate": "advancements.totf.root.title"
+      "translate": "advancements.thieves.root.title"
     },
     "description": {
-      "translate": "advancements.totf.root.description"
+      "translate": "advancements.thieves.root.description"
     },
     "background": "minecraft:textures/gui/advancements/backgrounds/stone.png",
     "show_toast": false,

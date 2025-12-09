@@ -1,6 +1,6 @@
 {
-  "parent": "totf:block/tent",
+  "parent": "thieves:block/tent",
   "textures": {
-    "layer0": "totf:blocks/tent"
+    "layer0": "thieves:blocks/tent"
   }
 }

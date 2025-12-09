@@ -1,6 +1,6 @@
 {
   "parent": "item/generated",
   "textures": {
-    "layer0": "totf:items/wonder_fertilizer"
+    "layer0": "thieves:items/wonder_fertilizer"
   }
 }

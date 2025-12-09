@@ -1,6 +1,6 @@
 {
-  "parent": "totf:block/skeleton_crate",
+  "parent": "thieves:block/skeleton_crate",
   "textures": {
-    "layer0": "totf:blocks/skeleton_crate"
+    "layer0": "thieves:blocks/skeleton_crate"
   }
 }

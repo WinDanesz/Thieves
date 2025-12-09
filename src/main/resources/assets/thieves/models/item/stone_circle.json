@@ -1,6 +1,6 @@
 {
-  "parent": "totf:block/stone_circle",
+  "parent": "thieves:block/stone_circle",
   "textures": {
-    "layer0": "totf:blocks/stone_circle"
+    "layer0": "thieves:blocks/stone_circle"
   }
 }

@@ -4,11 +4,11 @@
 	"ambientocclusion": false,
 	"texture_size": [32, 32],
 	"textures": {
-		"4": "totf:blocks/lost_cargo_sledge",
-		"7": "totf:blocks/bush",
-		"8": "totf:blocks/skeleton_crate_snowy",
+		"4": "thieves:blocks/lost_cargo_sledge",
+		"7": "thieves:blocks/bush",
+		"8": "thieves:blocks/skeleton_crate_snowy",
 		"9": "entity/chest/normal",
-		"particle": "totf:blocks/lost_cargo_sledge"
+		"particle": "thieves:blocks/lost_cargo_sledge"
 	},
 	"elements": [
 		{

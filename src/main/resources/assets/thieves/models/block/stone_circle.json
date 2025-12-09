@@ -3,7 +3,7 @@
 	"credit": "Made by Foreck with Blockbench",
 	"texture_size": [48, 48],
 	"textures": {
-		"0": "totf:blocks/stone_circle",
+		"0": "thieves:blocks/stone_circle",
 		"particle": "blocks/stonebrick_carved"
 	},
 	"elements": [

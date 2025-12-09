@@ -1,6 +1,6 @@
 {
-  "parent": "totf:block/tent_abandoned_idol",
+  "parent": "thieves:block/tent_abandoned_idol",
   "textures": {
-    "layer0": "totf:blocks/tent"
+    "layer0": "thieves:blocks/tent"
   }
 }

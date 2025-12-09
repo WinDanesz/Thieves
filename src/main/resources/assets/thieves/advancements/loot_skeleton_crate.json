@@ -4,17 +4,17 @@
       "item": "minecraft:bone"
     },
     "title": {
-      "translate": "advancements.totf.loot_skeleton_crate.title"
+      "translate": "advancements.thieves.loot_skeleton_crate.title"
     },
     "description": {
-      "translate": "advancements.totf.loot_skeleton_crate.description"
+      "translate": "advancements.thieves.loot_skeleton_crate.description"
     },
     "frame": "task",
     "show_toast": true,
     "announce_to_chat": true,
     "hidden": true
   },
-  "parent": "totf:root",
+  "parent": "thieves:root",
   "criteria": {
     "loot_skeleton_crate": {
       "trigger": "minecraft:impossible"

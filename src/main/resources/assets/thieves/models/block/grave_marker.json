@@ -3,7 +3,7 @@
 	"credit": "Made by Foreck with Blockbench",
 	"textures": {
 		"0": "blocks/dirt",
-		"1": "totf:blocks/skeleton_crate",
+		"1": "thieves:blocks/skeleton_crate",
 		"particle": "blocks/dirt"
 	},
 	"elements": [

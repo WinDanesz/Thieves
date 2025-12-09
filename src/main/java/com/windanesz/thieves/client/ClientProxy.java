@@ -63,6 +63,8 @@ public class ClientProxy extends CommonProxy {
 
 	private void registerEntityRenderers() {
 		RenderingRegistry.registerEntityRenderingHandler(EntityThief.class, RenderThief::new);
+		RenderingRegistry.registerEntityRenderingHandler(com.windanesz.thieves.entity.EntityThiefScout.class, RenderThief::new);
+		RenderingRegistry.registerEntityRenderingHandler(com.windanesz.thieves.entity.EntityMasterThief.class, RenderThief::new);
 	}
 
 	private void registerTileEntityRenderers() {
@@ -74,6 +76,10 @@ public class ClientProxy extends CommonProxy {
 
 		if (data != null) {
 			data.hauntingProgress = message.hauntedProgress;
+			data.robberyProgress = message.robberyProgress;
+			data.completedRobberies = message.completedRobberies;
+			data.scoutWarningActive = message.scoutWarningActive;
+			data.scoutVisitCount = message.scoutVisitCount;
 		}
 	}
 }

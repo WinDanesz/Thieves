@@ -1,8 +1,0 @@
-{
-  "variants": {
-    "facing=north": { "model": "totf:armillary" },
-    "facing=east":  { "model": "totf:armillary", "y": 90 },
-    "facing=south": { "model": "totf:armillary", "y": 180 },
-    "facing=west":  { "model": "totf:armillary", "y": 270 }
-  }
-}

@@ -1,6 +1,6 @@
 {
-  "parent": "totf:block/lost_cargo",
+  "parent": "thieves:block/lost_cargo",
   "textures": {
-    "layer0": "totf:blocks/lost_cargo"
+    "layer0": "thieves:blocks/lost_cargo"
   }
 }

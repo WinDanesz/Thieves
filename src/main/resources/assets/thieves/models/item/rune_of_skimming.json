@@ -1,6 +1,6 @@
 {
     "parent": "item/handheld",
     "textures": {
-        "layer0": "totf:items/rune_of_skimming"
+        "layer0": "thieves:items/rune_of_skimming"
     }
 }

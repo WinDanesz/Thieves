@@ -4,11 +4,11 @@
 	"ambientocclusion": false,
 	"texture_size": [32, 32],
 	"textures": {
-		"0": "totf:blocks/lost_cargo",
+		"0": "thieves:blocks/lost_cargo",
 		"1": "entity/chest/normal",
-		"2": "totf:blocks/bush",
-		"4": "totf:blocks/skeleton_crate",
-		"particle": "totf:blocks/lost_cargo"
+		"2": "thieves:blocks/bush",
+		"4": "thieves:blocks/skeleton_crate",
+		"particle": "thieves:blocks/lost_cargo"
 	},
 	"elements": [
 		{

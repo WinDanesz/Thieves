@@ -1,6 +1,6 @@
 {
     "parent": "item/generated",
     "textures": {
-        "layer0": "totf:items/painting_the_bloodcurling"
+        "layer0": "thieves:items/painting_the_bloodcurling"
     }
 }

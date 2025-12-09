@@ -7,15 +7,18 @@ import net.minecraft.block.properties.PropertyDirection;
 import net.minecraft.block.state.BlockStateContainer;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.item.EntityItem;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.BlockRenderLayer;
 import net.minecraft.util.EnumBlockRenderType;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.text.TextComponentTranslation;
 import net.minecraft.world.IBlockAccess;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
@@ -129,13 +132,76 @@ public class BlockLootBag extends BlockContainer {
 	}
 
 	@Override
-	public void onBlockHarvested(World worldIn, BlockPos pos, IBlockState state, EntityPlayer player) {
-		if (!worldIn.isRemote && player.isCreative() && this.lootTable != null) {
-			LootTable loottable = worldIn.getLootTableManager().getLootTableFromLocation(this.lootTable);
-			LootContext.Builder lootcontext$builder = new LootContext.Builder((WorldServer) worldIn).withPlayer(player).withLuck(player.getLuck());
+	public boolean onBlockActivated(World worldIn, BlockPos pos, IBlockState state, EntityPlayer playerIn, 
+									EnumHand hand, EnumFacing facing, float hitX, float hitY, float hitZ) {
+		if (worldIn.isRemote) {
+			return true;
+		}
 
-			for (ItemStack itemstack : loottable.generateLootForPools(worldIn.rand, lootcontext$builder.build())) {
-				spawnAsEntity(worldIn, pos, itemstack);
+		TileEntity te = worldIn.getTileEntity(pos);
+		if (!(te instanceof TileEntityLootBag)) {
+			return false;
+		}
+
+		TileEntityLootBag lootBag = (TileEntityLootBag) te;
+		ItemStack heldItem = playerIn.getHeldItem(hand);
+
+		if (playerIn.isSneaking()) {
+			// Sneak + right-click: Remove random item
+			ItemStack removed = lootBag.removeRandomItem();
+			if (!removed.isEmpty()) {
+				if (!playerIn.inventory.addItemStackToInventory(removed)) {
+					// If player inventory is full, drop it
+					EntityItem entityItem = new EntityItem(worldIn, playerIn.posX, playerIn.posY, playerIn.posZ, removed);
+					worldIn.spawnEntity(entityItem);
+				}
+				playerIn.sendMessage(new TextComponentTranslation("message.thieves.loot_bag.removed", removed.getDisplayName()));
+				return true;
+			} else {
+				playerIn.sendMessage(new TextComponentTranslation("message.thieves.loot_bag.empty"));
+				return true;
+			}
+		} else {
+			// Right-click: Add held item
+			if (!heldItem.isEmpty()) {
+				ItemStack toAdd = heldItem.copy();
+				if (lootBag.addItem(toAdd)) {
+					// Successfully added
+					heldItem.shrink(toAdd.getCount());
+					playerIn.sendMessage(new TextComponentTranslation("message.thieves.loot_bag.added", toAdd.getDisplayName()));
+					return true;
+				} else {
+					playerIn.sendMessage(new TextComponentTranslation("message.thieves.loot_bag.full"));
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	@Override
+	public void onBlockHarvested(World worldIn, BlockPos pos, IBlockState state, EntityPlayer player) {
+		if (!worldIn.isRemote) {
+			// Drop loot bag contents when broken
+			TileEntity te = worldIn.getTileEntity(pos);
+			if (te instanceof TileEntityLootBag) {
+				TileEntityLootBag lootBag = (TileEntityLootBag) te;
+				for (ItemStack stack : lootBag.getAllItems()) {
+					if (!stack.isEmpty()) {
+						spawnAsEntity(worldIn, pos, stack);
+					}
+				}
+			}
+
+			// Also handle loot table if present
+			if (player.isCreative() && this.lootTable != null) {
+				LootTable loottable = worldIn.getLootTableManager().getLootTableFromLocation(this.lootTable);
+				LootContext.Builder lootcontext$builder = new LootContext.Builder((WorldServer) worldIn).withPlayer(player).withLuck(player.getLuck());
+
+				for (ItemStack itemstack : loottable.generateLootForPools(worldIn.rand, lootcontext$builder.build())) {
+					spawnAsEntity(worldIn, pos, itemstack);
+				}
 			}
 		}
 		super.onBlockHarvested(worldIn, pos, state, player);

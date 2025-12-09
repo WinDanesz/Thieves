@@ -1,6 +1,6 @@
 {
   "parent": "item/generated",
   "textures": {
-    "layer0": "totf:items/wheel"
+    "layer0": "thieves:items/wheel"
   }
 }

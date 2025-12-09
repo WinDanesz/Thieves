@@ -1,6 +1,6 @@
 {
-  "parent": "totf:block/bush_crate",
+  "parent": "thieves:block/bush_crate",
   "textures": {
-    "layer0": "totf:blocks/bush_crate"
+    "layer0": "thieves:blocks/bush_crate"
   }
 }

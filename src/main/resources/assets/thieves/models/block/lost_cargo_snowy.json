@@ -3,8 +3,8 @@
 	"credit": "Made by Foreck with Blockbench",
 	"texture_size": [32, 32],
 	"textures": {
-		"0": "totf:blocks/lost_cargo_sledge",
-		"2": "totf:blocks/skeleton_crate_snowy",
+		"0": "thieves:blocks/lost_cargo_sledge",
+		"2": "thieves:blocks/skeleton_crate_snowy",
 		"particle": "blocks/planks_spruce"
 	},
 	"elements": [

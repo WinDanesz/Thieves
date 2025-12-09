@@ -1,6 +1,6 @@
 {
-  "parent": "totf:block/lost_crate_potions",
+  "parent": "thieves:block/lost_crate_potions",
   "textures": {
-    "layer0": "totf:blocks/lost_crate_potions"
+    "layer0": "thieves:blocks/lost_crate_potions"
   }
 }
