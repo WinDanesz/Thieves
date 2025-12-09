@@ -11,6 +11,7 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityChest;
+import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 
@@ -105,6 +106,7 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 	@Override
 	public void resetTask() {
 		closeChest();
+		clearHeldItem();
 		currentState = State.IDLE;
 		targetChestPos = null;
 		carriedItems.clear();
@@ -179,6 +181,8 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			closeChest();
 			
 			if (success && !carriedItems.isEmpty()) {
+				// Hold the first stolen item in offhand
+				thief.setHeldItem(EnumHand.OFF_HAND, carriedItems.get(0).copy());
 				// Successfully extracted, now navigate to bag
 				currentState = State.NAVIGATING_TO_BAG;
 			} else {
@@ -223,6 +227,9 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 	private void updateDepositingItems() {
 		// Deposit items into loot bag
 		depositItemsInBag();
+		
+		// Clear the held item
+		clearHeldItem();
 		
 		// Clear carried items
 		carriedItems.clear();
@@ -397,6 +404,10 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			baseSpeed *= ((EntityMasterThief) thief).getStealingSpeedMultiplier();
 		}
 		return baseSpeed;
+	}
+
+	private void clearHeldItem() {
+		thief.setHeldItem(EnumHand.OFF_HAND, ItemStack.EMPTY);
 	}
 
 	private void openChest() {
