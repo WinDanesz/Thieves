@@ -39,6 +39,9 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 		super(worldIn);
 		this.setSize(0.5F, 1.8F);
 		this.setCanPickUpLoot(true);
+		// Enable door interaction for pathfinding
+		((net.minecraft.pathfinding.PathNavigateGround)this.getNavigator()).setBreakDoors(true);
+		((net.minecraft.pathfinding.PathNavigateGround)this.getNavigator()).setEnterDoors(true);
 	}
 
 	@Override
@@ -47,9 +50,9 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 		this.tasks.addTask(0, new ThiefAIEscapeWithLoot(this)); // Escape with loot bag
 		this.tasks.addTask(1, new ThiefAIPickupLootBag(this)); // Pick up full loot bag
 		this.tasks.addTask(2, new ThiefAIStealToLootBag(this)); // Steal from chests to loot bag
+		this.tasks.addTask(3, new EntityAIOpenDoor(this, true)); // Open doors
 		
-		// Original thief AI (lower priority)
-		this.tasks.addTask(3, new ThiefAISteal(this)); // Old steal AI (for compatibility)
+		// Combat and movement AI
 		this.tasks.addTask(4, new ThiefAIRunBehindTarget(this, 2.0D));
 		this.tasks.addTask(5, new EntityAIAttackMelee(this, 1.3D, false));
 		this.tasks.addTask(6, new ThiefAIFollowOwner(this, 1.3D, 5.0F, 3.0F));
