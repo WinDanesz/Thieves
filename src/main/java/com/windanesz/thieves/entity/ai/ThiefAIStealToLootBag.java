@@ -11,8 +11,10 @@ import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityChest;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
@@ -147,19 +149,23 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			thief.getVerticalFaceSpeed()
 		);
 
-		// Check if close enough
-		if (thief.getDistanceSq(targetChestPos) < 4.0D) {
-			// Reached chest, start extracting
+		// Get position in front of chest
+		Vec3d targetPos = getPositionInFrontOfChest(targetChestPos);
+
+		// Check if close enough to the target position
+		double distSq = thief.getDistanceSq(targetPos.x, targetPos.y, targetPos.z);
+		if (distSq < 2.25D) { // 1.5 blocks
+			// Reached position in front of chest, start extracting
 			currentState = State.EXTRACTING_ITEMS;
 			extractionTimer = EXTRACTION_TIME;
 			thief.getNavigator().clearPath();
 		} else {
-			// Navigate to chest
+			// Navigate to position in front of chest
 			double speed = getStealingSpeed();
 			thief.getNavigator().tryMoveToXYZ(
-				targetChestPos.getX() + 0.5,
-				targetChestPos.getY(),
-				targetChestPos.getZ() + 0.5,
+				targetPos.x,
+				targetPos.y,
+				targetPos.z,
 				speed
 			);
 		}
@@ -404,6 +410,16 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			baseSpeed *= ((EntityMasterThief) thief).getStealingSpeedMultiplier();
 		}
 		return baseSpeed;
+	}
+
+	private Vec3d getPositionInFrontOfChest(BlockPos chestPos) {
+		// Get the chest's facing direction
+		EnumFacing facing = world.getBlockState(chestPos).getValue(net.minecraft.block.BlockChest.FACING);
+		
+		// Calculate position 1.5 blocks in front of the chest
+		BlockPos frontPos = chestPos.offset(facing, 1);
+		
+		return new Vec3d(frontPos.getX() + 0.5, frontPos.getY(), frontPos.getZ() + 0.5);
 	}
 
 	private void clearHeldItem() {
