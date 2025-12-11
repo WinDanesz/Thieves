@@ -141,10 +141,10 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 	}
 
 	/**
-	 * Updates the ready-for-pickup status based on fullness.
+	 * Updates the ready-for-pickup status based on fullness or thief limit.
 	 */
 	private void updateReadyForPickup() {
-		readyForPickup = isFull();
+		readyForPickup = isFull() || hasReachedThiefLimit();
 	}
 
 	/**
