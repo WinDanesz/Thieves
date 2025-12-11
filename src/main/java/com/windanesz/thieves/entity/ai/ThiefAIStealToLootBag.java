@@ -75,9 +75,9 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			}
 		}
 
-		// Check if loot bag is full
-		if (isLootBagFull(lootBagPos)) {
-			return false; // Bag is full, can't steal more
+		// Check if loot bag has reached thief limit
+		if (hasReachedThiefLimit(lootBagPos)) {
+			return false; // Bag has reached limit, can't steal more
 		}
 
 		// Find a chest with items
@@ -96,7 +96,7 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 		return currentState != State.IDLE && 
 			   lootBagPos != null && 
 			   isValidLootBag(lootBagPos) &&
-			   !isLootBagFull(lootBagPos);
+			   !hasReachedThiefLimit(lootBagPos);
 	}
 
 	@Override
@@ -396,10 +396,10 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 		return world.getBlockState(pos).getBlock() == ModBlocks.LOOT_BAG;
 	}
 
-	private boolean isLootBagFull(BlockPos pos) {
+	private boolean hasReachedThiefLimit(BlockPos pos) {
 		TileEntity te = world.getTileEntity(pos);
 		if (te instanceof TileEntityLootBag) {
-			return ((TileEntityLootBag) te).isFull();
+			return ((TileEntityLootBag) te).hasReachedThiefLimit();
 		}
 		return false;
 	}

@@ -93,6 +93,13 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 	}
 
 	/**
+	 * Checks if the bag has reached the maximum item count for thieves to stop stealing.
+	 */
+	public boolean hasReachedThiefLimit() {
+		return getTotalItemCount() >= Settings.lootBag.maxItemCount;
+	}
+
+	/**
 	 * Gets the number of occupied slots.
 	 */
 	public int getOccupiedSlots() {
@@ -103,6 +110,20 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 			}
 		}
 		return count;
+	}
+
+	/**
+	 * Gets the total count of all items in the bag (including stackable items).
+	 */
+	public int getTotalItemCount() {
+		int totalCount = 0;
+		for (int i = 0; i < inventory.getSlots(); i++) {
+			ItemStack stack = inventory.getStackInSlot(i);
+			if (!stack.isEmpty()) {
+				totalCount += stack.getCount();
+			}
+		}
+		return totalCount;
 	}
 
 	/**

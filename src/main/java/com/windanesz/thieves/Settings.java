@@ -178,6 +178,10 @@ public class Settings {
 		@Config.RangeInt(min = 9, max = 54)
 		public int inventorySize = 27;
 
+		@Config.Comment("Maximum total item count in loot bag (including stackable items)")
+		@Config.RangeInt(min = 1, max = 10000)
+		public int maxItemCount = 16;
+
 		@Config.Comment("Loot bag durability (hits before breaking)")
 		@Config.RangeInt(min = 1, max = 100)
 		public int durability = 5;
