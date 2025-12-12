@@ -37,14 +37,13 @@ public class ModItems {
 		registerItemBlock(registry, ModBlocks.LOOT_BAG);
 		
 		// Register items
-		//^^registry.register(new ItemLootBag());
+		//registry.register(new ItemLootBag());
 	}
 
 	// Helper for registering ItemBlocks
 	private static void registerItemBlock(IForgeRegistry<Item> registry, Block block) {
-		ItemBlock itemBlock = new ItemBlock(block);
+		ItemBlock itemBlock = new ItemLootBag(block);
 		itemBlock.setRegistryName(block.getRegistryName());
-
 		registry.register(itemBlock);
 	}
 

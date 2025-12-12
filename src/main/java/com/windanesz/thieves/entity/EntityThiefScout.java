@@ -109,6 +109,10 @@ public class EntityThiefScout extends EntityThief {
 	 * Called when player spots the scout for the first time.
 	 */
 	private void onSpottedByPlayer(EntityPlayer player) {
+		// Send warning message
+		player.sendMessage(new net.minecraft.util.text.TextComponentTranslation("message.thieves.scout_spotted")
+			.setStyle(new net.minecraft.util.text.Style().setColor(net.minecraft.util.text.TextFormatting.DARK_RED)));
+		
 		// Grant advancement
 		if (player instanceof net.minecraft.entity.player.EntityPlayerMP) {
 			net.minecraft.entity.player.EntityPlayerMP playerMP = (net.minecraft.entity.player.EntityPlayerMP) player;

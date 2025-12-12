@@ -5,9 +5,11 @@ import com.windanesz.thieves.Thieves;
 import com.windanesz.thieves.block.TileEntityLootBag;
 import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.init.ModItems;
+import net.minecraft.block.Block;
 import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
@@ -21,12 +23,12 @@ import net.minecraftforge.items.ItemStackHandler;
 /**
  * Item form of the loot bag, carried by thieves when they pick up a full bag.
  */
-public class ItemLootBag extends Item {
+public class ItemLootBag extends ItemBlock {
 
-	public ItemLootBag() {
-		setMaxStackSize(1);
+	public ItemLootBag(Block block) {
+        super(block);
+        setMaxStackSize(1);
 		setCreativeTab(CreativeTabs.MISC);
-		setRegistryName(Thieves.MODID, "loot_bag");
 		setTranslationKey(Thieves.MODID + ".loot_bag");
 	}
 
@@ -69,7 +71,7 @@ public class ItemLootBag extends Item {
 	 * Creates an ItemLootBag from a TileEntityLootBag, preserving contents.
 	 */
 	public static ItemStack fromTileEntity(TileEntityLootBag lootBag) {
-		ItemStack stack = new ItemStack(ModItems.LOOT_BAG_ITEM);
+		ItemStack stack = new ItemStack(Item.getItemFromBlock(ModBlocks.LOOT_BAG));
 		NBTTagCompound nbt = new NBTTagCompound();
 		nbt.setTag("inventory", lootBag.getInventory().serializeNBT());
 		stack.setTagCompound(nbt);

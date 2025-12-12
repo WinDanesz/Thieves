@@ -3,6 +3,7 @@ package com.windanesz.thieves;
 import com.windanesz.thieves.capability.PlayerCapability;
 import com.windanesz.thieves.command.CommandGetThiefGatherProgress;
 import com.windanesz.thieves.command.CommandSetThiefGatherProgress;
+import com.windanesz.thieves.command.CommandTriggerRobbery;
 import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.init.ModLootTables;
 import com.windanesz.thieves.network.PacketHandler;
@@ -57,6 +58,7 @@ public class Thieves implements ForgeChunkManager.LoadingCallback {
 	public void serverStarting(FMLServerStartingEvent event) {
 		event.registerServerCommand(new CommandSetThiefGatherProgress());
 		event.registerServerCommand(new CommandGetThiefGatherProgress());
+		event.registerServerCommand(new CommandTriggerRobbery());
 	}
 
 	@Override

@@ -1,12 +1,12 @@
 {
   "variants": {
-    "facing=north,snowy=false": { "model": "thieves:lost_crate_potions" },
-    "facing=east,snowy=false":  { "model": "thieves:lost_crate_potions", "y": 90 },
-    "facing=south,snowy=false": { "model": "thieves:lost_crate_potions", "y": 180 },
-    "facing=west,snowy=false":  { "model": "thieves:lost_crate_potions", "y": 270 },
-    "facing=north,snowy=true": { "model": "thieves:lost_crate_potions" },
-    "facing=east,snowy=true":  { "model": "thieves:lost_crate_potions", "y": 90 },
-    "facing=south,snowy=true": { "model": "thieves:lost_crate_potions", "y": 180 },
-    "facing=west,snowy=true":  { "model": "thieves:lost_crate_potions", "y": 270 }
+    "facing=north,snowy=false": { "model": "thieves:loot_bag" },
+    "facing=east,snowy=false":  { "model": "thieves:loot_bag", "y": 90 },
+    "facing=south,snowy=false": { "model": "thieves:loot_bag", "y": 180 },
+    "facing=west,snowy=false":  { "model": "thieves:loot_bag", "y": 270 },
+    "facing=north,snowy=true": { "model": "thieves:loot_bag" },
+    "facing=east,snowy=true":  { "model": "thieves:loot_bag", "y": 90 },
+    "facing=south,snowy=true": { "model": "thieves:loot_bag", "y": 180 },
+    "facing=west,snowy=true":  { "model": "thieves:loot_bag", "y": 270 }
   }
 }

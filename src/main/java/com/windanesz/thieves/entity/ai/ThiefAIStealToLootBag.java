@@ -7,6 +7,7 @@ import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.util.PlayerBaseDetector;
 import net.minecraft.entity.ai.EntityAIBase;
 import net.minecraft.init.Blocks;
+import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
@@ -60,6 +61,11 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 
 	@Override
 	public boolean shouldExecute() {
+		// Don't execute if thief already has a loot bag in inventory
+		if (thiefHasLootBag()) {
+			return false;
+		}
+		
 		// Don't execute if on cooldown
 		if (searchCooldown > 0) {
 			searchCooldown--;
@@ -450,5 +456,10 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 				chestOpened = false;
 			}
 		}
+	}
+
+	private boolean thiefHasLootBag() {
+		ItemStack offhand = thief.getItemStackFromSlot(EntityEquipmentSlot.OFFHAND);
+		return !offhand.isEmpty() && offhand.getItem() instanceof com.windanesz.thieves.item.ItemLootBag;
 	}
 }

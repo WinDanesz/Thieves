@@ -34,7 +34,7 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	public ThiefAIEscapeWithLoot(EntityThief thief) {
 		this.thief = thief;
 		this.world = thief.world;
-		this.setMutexBits(7); // All movement flags
+		this.setMutexBits(3); // Movement mutex (same as other thief AIs)
 	}
 
 	@Override

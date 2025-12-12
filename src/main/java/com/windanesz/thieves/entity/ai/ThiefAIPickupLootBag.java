@@ -155,6 +155,10 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 		// Play sound
 		world.playSound(null, targetBagPos, SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.NEUTRAL, 1.0F, 1.0F);
 
+		// Clear attack target to allow escape AI to take control
+		thief.setAttackTarget(null);
+		thief.setRevengeTarget(null);
+		
 		// Mark that thief now has the loot
 		thief.setNeutral(true); // Use existing neutral flag to indicate thief has loot
 	}
