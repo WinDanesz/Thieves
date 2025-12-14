@@ -1,6 +1,8 @@
 package com.windanesz.thieves;
 
 import com.windanesz.thieves.capability.PlayerCapability;
+import com.windanesz.thieves.command.CommandGetPlayerBase;
+import com.windanesz.thieves.command.CommandSetPlayerBase;
 import com.windanesz.thieves.command.CommandTriggerRobbery;
 import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.init.ModLootTables;
@@ -40,7 +42,6 @@ public class Thieves implements ForgeChunkManager.LoadingCallback {
 		ForgeChunkManager.setForcedChunkLoadingCallback(instance, this);
 		proxy.preInit(event);
 		ModBlocks.registerTileEntities();
-		ModLootTables.register();
 		PlayerCapability.register();
 	}
 
@@ -55,6 +56,8 @@ public class Thieves implements ForgeChunkManager.LoadingCallback {
 	@Mod.EventHandler
 	public void serverStarting(FMLServerStartingEvent event) {
 		event.registerServerCommand(new CommandTriggerRobbery());
+		event.registerServerCommand(new CommandSetPlayerBase());
+		event.registerServerCommand(new CommandGetPlayerBase());
 	}
 
 	@Override

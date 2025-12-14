@@ -1,6 +1,8 @@
 package com.windanesz.thieves.world;
 
 import com.windanesz.thieves.Thieves;
+import com.windanesz.thieves.block.TileEntityLootBag;
+import com.windanesz.thieves.init.ModBlocks;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.init.Blocks;
 import net.minecraft.inventory.IInventory;
@@ -152,7 +154,7 @@ public class ThiefStashManager extends WorldSavedData {
 	}
 
 	/**
-	 * Finds a suitable underground location for a stash.
+	 * Finds a suitable surface location for a half-dug hideout.
 	 */
 	@Nullable
 	private BlockPos findStashLocation(World world, BlockPos nearLocation) {
@@ -166,13 +168,11 @@ public class ThiefStashManager extends WorldSavedData {
 
 			BlockPos candidatePos = nearLocation.add(offsetX, 0, offsetZ);
 
-			// Try to find a suitable Y level (underground, 30-50)
-			for (int y = 30; y <= 50; y++) {
-				BlockPos checkPos = new BlockPos(candidatePos.getX(), y, candidatePos.getZ());
+			// Find ground surface level
+			BlockPos surfacePos = world.getHeight(candidatePos);
 
-				if (isValidStashLocation(world, checkPos)) {
-					return checkPos;
-				}
+			if (isValidStashLocation(world, surfacePos)) {
+				return surfacePos;
 			}
 		}
 
@@ -180,96 +180,158 @@ public class ThiefStashManager extends WorldSavedData {
 	}
 
 	/**
-	 * Checks if a location is valid for a stash.
+	 * Checks if a location is valid for a half-dug hideout.
 	 */
 	private boolean isValidStashLocation(World world, BlockPos pos) {
-		// Check if there's enough space (3x3x3)
-		for (int x = -1; x <= 1; x++) {
-			for (int y = 0; y <= 2; y++) {
-				for (int z = -1; z <= 1; z++) {
-					BlockPos checkPos = pos.add(x, y, z);
-					IBlockState state = world.getBlockState(checkPos);
-
-					// Must be replaceable (stone, dirt, etc.)
-					if (!state.getBlock().isReplaceable(world, checkPos) && 
-						state.getBlock() != Blocks.STONE &&
-						state.getBlock() != Blocks.DIRT &&
-						state.getBlock() != Blocks.COBBLESTONE) {
-						return false;
-					}
-				}
-			}
+		// Check if position is on solid ground
+		BlockPos below = pos.down();
+		if (!world.getBlockState(below).isSideSolid(world, below, net.minecraft.util.EnumFacing.UP)) {
+			return false;
 		}
 
-		return true;
-	}
+		// Check if there's enough air space above (need 2 blocks high for the hideout)
+		if (!world.isAirBlock(pos) || !world.isAirBlock(pos.up())) {
+			return false;
+		}
 
-	/**
-	 * Generates a small stash structure.
-	 */
-	private void generateStashStructure(World world, BlockPos pos) {
-		// Create a 3x3x3 room
-		// Floor
+		// Check 3x3 area is mostly clear
+		int airBlocks = 0;
 		for (int x = -1; x <= 1; x++) {
 			for (int z = -1; z <= 1; z++) {
-				world.setBlockState(pos.add(x, -1, z), Blocks.COBBLESTONE.getDefaultState());
-			}
-		}
-
-		// Walls
-		for (int x = -1; x <= 1; x++) {
-			for (int y = 0; y <= 2; y++) {
-				for (int z = -1; z <= 1; z++) {
-					BlockPos blockPos = pos.add(x, y, z);
-
-					// Walls
-					if (x == -1 || x == 1 || z == -1 || z == 1 || y == 2) {
-						// Add some variety
-						if (RANDOM.nextFloat() < 0.2F) {
-							world.setBlockState(blockPos, Blocks.MOSSY_COBBLESTONE.getDefaultState());
-						} else if (RANDOM.nextFloat() < 0.1F) {
-							world.setBlockState(blockPos, Blocks.STONEBRICK.getDefaultState());
-						} else {
-							world.setBlockState(blockPos, Blocks.COBBLESTONE.getDefaultState());
-						}
-					} else {
-						// Interior - clear it
-						world.setBlockToAir(blockPos);
-					}
+				BlockPos checkPos = pos.add(x, 0, z);
+				if (world.isAirBlock(checkPos) || world.getBlockState(checkPos).getBlock().isReplaceable(world, checkPos)) {
+					airBlocks++;
 				}
 			}
 		}
 
-		// Add a torch or two
-		if (RANDOM.nextBoolean()) {
-			world.setBlockState(pos.add(1, 1, 0), Blocks.TORCH.getDefaultState());
+		// At least 6 out of 9 blocks should be air/replaceable
+		return airBlocks >= 6;
+	}
+
+	/**
+	 * Generates a simple half-dug hideout camouflaged with leaves or sandstone.
+	 */
+	private void generateStashStructure(World world, BlockPos pos) {
+		// Determine if we should use sandstone (desert biome and over sand)
+		boolean useSandstone = false;
+		net.minecraft.world.biome.Biome biome = world.getBiome(pos);
+		
+		// Check if biome is hot (temperature > 1.0 typically means desert-like)
+		if (biome.getTemperature(pos) > 1.0F) {
+			// Check if ground blocks are sand
+			boolean overSand = true;
+			for (int x = -1; x <= 1 && overSand; x++) {
+				for (int z = -1; z <= 1 && overSand; z++) {
+					BlockPos checkPos = pos.add(x, -1, z);
+					IBlockState groundBlock = world.getBlockState(checkPos);
+					if (groundBlock.getBlock() != Blocks.SAND) {
+						overSand = false;
+					}
+				}
+			}
+			useSandstone = overSand;
 		}
-		if (RANDOM.nextBoolean()) {
-			world.setBlockState(pos.add(-1, 1, 0), Blocks.TORCH.getDefaultState());
+		
+		// Get camouflage block state
+		IBlockState camouflageBlock;
+		if (useSandstone) {
+			camouflageBlock = Blocks.SANDSTONE.getDefaultState();
+		} else {
+			// Get persistent leaves state (won't decay)
+			camouflageBlock = Blocks.LEAVES.getDefaultState()
+					.withProperty(net.minecraft.block.BlockLeaves.CHECK_DECAY, false)
+					.withProperty(net.minecraft.block.BlockLeaves.DECAYABLE, false);
+		}
+		
+		// Excavate a 3x1x3 hole (2 blocks deep: y=0 and y=-1)
+		for (int x = -1; x <= 1; x++) {
+			for (int z = -1; z <= 1; z++) {
+				// Clear upper layer (y=0)
+				BlockPos upperPos = pos.add(x, 0, z);
+				world.setBlockToAir(upperPos);
+				
+				// Clear lower layer (y=-1) - this is where loot will be placed
+				BlockPos lowerPos = pos.add(x, -1, z);
+				world.setBlockToAir(lowerPos);
+				
+				// Ensure ground below is solid (y=-2)
+				BlockPos below = pos.add(x, -2, z);
+				if (world.isAirBlock(below) || !world.getBlockState(below).isOpaqueCube()) {
+					world.setBlockState(below, Blocks.DIRT.getDefaultState());
+				}
+			}
+		}
+		
+		// Surround with camouflage blocks on the sides (at ground level, y=0)
+		for (int side = -1; side <= 1; side++) {
+			// North and South walls
+			world.setBlockState(pos.add(side, 0, -2), camouflageBlock);
+			world.setBlockState(pos.add(side, 0, 2), camouflageBlock);
+			// East and West walls (skip corners)
+			if (side != -1 && side != 1) {
+				world.setBlockState(pos.add(-2, 0, side), camouflageBlock);
+				world.setBlockState(pos.add(2, 0, side), camouflageBlock);
+			}
+		}
+		
+		// Cover top with camouflage blocks (3x3 roof at y+1)
+		for (int x = -1; x <= 1; x++) {
+			for (int z = -1; z <= 1; z++) {
+				// Add some randomness - don't fully cover
+				if (x == 0 && z == 0 && RANDOM.nextFloat() < 0.3F) {
+					continue; // Small opening in center sometimes
+				}
+				world.setBlockState(pos.add(x, 1, z), camouflageBlock);
+			}
+		}
+		
+		// Maybe add an empty chest in a random corner (at lower level, y=-1)
+		if (RANDOM.nextFloat() < 0.4F) { // 40% chance
+			int cornerX = RANDOM.nextBoolean() ? -1 : 1;
+			int cornerZ = RANDOM.nextBoolean() ? -1 : 1;
+			BlockPos chestPos = pos.add(cornerX, -1, cornerZ);
+			world.setBlockState(chestPos, Blocks.CHEST.getDefaultState());
 		}
 	}
 
 	/**
-	 * Places a chest with loot at the stash location.
+	 * Places the loot bag block at the stash location.
 	 */
 	private void placeStashChest(World world, BlockPos pos, ItemStackHandler lootContents) {
-		// Place chest in center
-		world.setBlockState(pos, Blocks.CHEST.getDefaultState());
-
-		// Get chest tile entity and fill with loot
-		TileEntity te = world.getTileEntity(pos);
-		if (te instanceof TileEntityChest) {
-			TileEntityChest chest = (TileEntityChest) te;
-
-			// Transfer items from loot bag to chest
-			for (int i = 0; i < lootContents.getSlots() && i < chest.getSizeInventory(); i++) {
-				ItemStack stack = lootContents.getStackInSlot(i);
-				if (!stack.isEmpty()) {
-					chest.setInventorySlotContents(i, stack.copy());
+		// Find a suitable position in the 3x3 area at the lower level (y=-1)
+		List<BlockPos> availablePositions = new ArrayList<>();
+		for (int x = -1; x <= 1; x++) {
+			for (int z = -1; z <= 1; z++) {
+				BlockPos checkPos = pos.add(x, -1, z);
+				if (world.isAirBlock(checkPos)) {
+					availablePositions.add(checkPos);
 				}
 			}
-
-			chest.markDirty();
+		}
+		
+		if (availablePositions.isEmpty()) {
+			// Fallback to center if nothing available
+			availablePositions.add(pos);
+		}
+		
+		// Pick random position for loot bag
+		BlockPos bagPos = availablePositions.get(RANDOM.nextInt(availablePositions.size()));
+		
+		// Place loot bag block
+		world.setBlockState(bagPos, ModBlocks.LOOT_BAG.getDefaultState());
+		
+		// Fill it with the stolen loot
+		TileEntity te = world.getTileEntity(bagPos);
+		if (te instanceof TileEntityLootBag) {
+			TileEntityLootBag lootBag = (TileEntityLootBag) te;
+			for (int i = 0; i < lootContents.getSlots(); i++) {
+				ItemStack stack = lootContents.getStackInSlot(i);
+				if (!stack.isEmpty()) {
+					lootBag.addItem(stack);
+				}
+			}
+			lootBag.markDirty();
 		}
 	}
 

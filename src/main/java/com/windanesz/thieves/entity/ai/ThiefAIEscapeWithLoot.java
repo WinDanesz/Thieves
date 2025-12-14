@@ -25,21 +25,24 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	private Vec3d escapeDirection;
 	private int escapeTimer = 0;
 	private int stuckTimer = 0;
+	private boolean escapeInitiated = false; // Track if escape started (continue even if bag is lost)
+	private int pathRecalcCooldown = 0; // Cooldown to prevent constant path recalculation
 
 	private static final int MAX_ESCAPE_TIME = 12000; // 10 minutes
 	private static final double ESCAPE_DISTANCE = 200.0D; // Distance from base to be "safe"
 	private static final double PLAYER_AVOID_DISTANCE = 128.0D; // Distance from players to despawn
+	private static final double PLAYER_FLEE_DISTANCE = 12.0D; // Distance to actively flee from players
 	private static final double ESCAPE_SPEED = 1.5D;
+	private static final int PATH_RECALC_COOLDOWN = 60; // Ticks between path recalculations (3 seconds)
 
 	public ThiefAIEscapeWithLoot(EntityThief thief) {
 		this.thief = thief;
 		this.world = thief.world;
-		this.setMutexBits(3); // Movement mutex (same as other thief AIs)
+		this.setMutexBits(3);
 	}
 
 	@Override
 	public boolean shouldExecute() {
-		// Only execute if thief has a loot bag
 		if (!hasLootBag()) {
 			return false;
 		}
@@ -55,13 +58,18 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	@Override
 	public boolean shouldContinueExecuting() {
 		// Continue until escape conditions are met
-		return hasLootBag() && !hasEscaped();
+		// Once escape is initiated, continue even if loot bag is lost
+		return escapeInitiated && !hasEscaped();
 	}
 
 	@Override
 	public void startExecuting() {
 		escapeTimer = 0;
 		stuckTimer = 0;
+		escapeInitiated = true;
+		
+		// Enable chunk loading to prevent despawn during escape
+		thief.enableChunkLoading();
 		
 		// Calculate initial escape direction (away from origin)
 		calculateEscapeDirection();
@@ -70,11 +78,16 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	@Override
 	public void resetTask() {
 		thief.getNavigator().clearPath();
+		thief.releaseChunkTicket();
+		escapeInitiated = false;
 	}
 
 	@Override
 	public void updateTask() {
 		escapeTimer++;
+		if (pathRecalcCooldown > 0) {
+			pathRecalcCooldown--;
+		}
 
 		// Check escape conditions
 		if (hasEscaped()) {
@@ -82,17 +95,18 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 			return;
 		}
 
-		// Update escape path
-		if (thief.getNavigator().noPath()) {
+		// Update escape path only when needed
+		if (thief.getNavigator().noPath() && pathRecalcCooldown <= 0) {
 			findEscapePath();
+			pathRecalcCooldown = PATH_RECALC_COOLDOWN;
 			stuckTimer++;
 
-			// If stuck for too long, try teleporting or give up
+			// If stuck for too long, give up
 			if (stuckTimer > 200) { // 10 seconds stuck
 				createStashAndDespawn();
 				return;
 			}
-		} else {
+		} else if (!thief.getNavigator().noPath()) {
 			stuckTimer = 0;
 		}
 
@@ -101,12 +115,6 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 			double lookX = thief.posX + escapeDirection.x * 10.0D;
 			double lookZ = thief.posZ + escapeDirection.z * 10.0D;
 			thief.getLookHelper().setLookPosition(lookX, thief.posY, lookZ, 10.0F, thief.getVerticalFaceSpeed());
-		}
-
-		// Avoid players actively
-		EntityPlayer nearestPlayer = world.getClosestPlayerToEntity(thief, 32.0D);
-		if (nearestPlayer != null) {
-			fleeFromPlayer(nearestPlayer);
 		}
 	}
 
@@ -138,21 +146,21 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 			calculateEscapeDirection();
 		}
 
-		// Try to find a position in escape direction
-		double targetX = thief.posX + escapeDirection.x * 16.0D;
-		double targetZ = thief.posZ + escapeDirection.z * 16.0D;
+		// Path far ahead in escape direction (64 blocks)
+		double targetX = thief.posX + escapeDirection.x * 64.0D;
+		double targetZ = thief.posZ + escapeDirection.z * 64.0D;
+		BlockPos targetPos = new BlockPos(targetX, thief.posY, targetZ);
+		targetPos = world.getHeight(targetPos);
 
-		// Prefer darker areas (lower light level)
-		Vec3d targetPos = findDarkPath(targetX, targetZ);
+		// Try direct path first
+		boolean success = thief.getNavigator().tryMoveToXYZ(targetPos.getX(), targetPos.getY(), targetPos.getZ(), ESCAPE_SPEED);
 
-		if (targetPos != null) {
-			thief.getNavigator().tryMoveToXYZ(targetPos.x, targetPos.y, targetPos.z, ESCAPE_SPEED);
-		} else {
-			// Fallback: just move away from origin
+		// If direct path fails, use random position away from base
+		if (!success) {
 			Vec3d randomPos = RandomPositionGenerator.findRandomTargetBlockAwayFrom(
 				thief,
-				16,
-				7,
+				32,
+				10,
 				new Vec3d(escapeOrigin.getX(), escapeOrigin.getY(), escapeOrigin.getZ())
 			);
 
@@ -186,27 +194,28 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	private void fleeFromPlayer(EntityPlayer player) {
 		Vec3d fleePos = RandomPositionGenerator.findRandomTargetBlockAwayFrom(
 			thief,
-			16,
-			7,
+			24,
+			10,
 			new Vec3d(player.posX, player.posY, player.posZ)
 		);
 
 		if (fleePos != null) {
-			thief.getNavigator().tryMoveToXYZ(fleePos.x, fleePos.y, fleePos.z, ESCAPE_SPEED * 1.2D);
+			thief.getNavigator().tryMoveToXYZ(fleePos.x, fleePos.y, fleePos.z, ESCAPE_SPEED * 1.3D);
 		}
 	}
 
 	private boolean hasEscaped() {
 		// Check distance from origin
 		if (escapeOrigin != null) {
-			double distanceFromOrigin = thief.getDistanceSq(escapeOrigin);
-			if (distanceFromOrigin > ESCAPE_DISTANCE * ESCAPE_DISTANCE) {
+			return true;
+			//double distanceFromOrigin = thief.getDistanceSq(escapeOrigin);
+			//if (distanceFromOrigin > ESCAPE_DISTANCE * ESCAPE_DISTANCE) {
 				// Far enough from base, check for nearby players
-				EntityPlayer nearestPlayer = world.getClosestPlayerToEntity(thief, PLAYER_AVOID_DISTANCE);
-				if (nearestPlayer == null) {
-					return true; // Safe to despawn
-				}
-			}
+			//	EntityPlayer nearestPlayer = world.getClosestPlayerToEntity(thief, PLAYER_AVOID_DISTANCE);
+				//if (nearestPlayer == null) {
+				//	return true; // Safe to despawn
+				//}
+			//}
 		}
 
 		// Check time limit
@@ -221,6 +230,9 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 		if (world.isRemote) {
 			return;
 		}
+
+		// Release chunk loading before despawning
+		thief.releaseChunkTicket();
 
 		// Get loot bag from thief's inventory
 		ItemStack bagItem = thief.getItemStackFromSlot(EntityEquipmentSlot.OFFHAND);

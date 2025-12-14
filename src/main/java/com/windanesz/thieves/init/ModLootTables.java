@@ -14,7 +14,4 @@ public class ModLootTables {
 	/**
 	 * Called from the preInit method in the main mod class to register the custom dungeon loot.
 	 */
-	public static void register() {
-		LootTableList.register(new ResourceLocation(Thieves.MODID, "entities/thief"));
-	}
 }
