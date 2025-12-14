@@ -11,6 +11,8 @@ import net.minecraft.entity.ai.*;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraftforge.common.ForgeChunkManager;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.init.Items;
 import net.minecraft.init.SoundEvents;
 import net.minecraft.inventory.EntityEquipmentSlot;
@@ -27,33 +29,40 @@ import net.minecraft.util.SoundEvent;
 import net.minecraft.world.World;
 
 import javax.annotation.Nullable;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 public class EntityThief extends EntityMob implements IEntityOwnable {
 
 	public static final ResourceLocation LOOT_TABLE = new ResourceLocation(Thieves.MODID, "entities/thief");
 	protected static final DataParameter<Boolean> IS_STEALING = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
+	protected static final DataParameter<Boolean> IS_ESCAPING = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
 	protected static final DataParameter<Optional<UUID>> OWNER_UNIQUE_ID = EntityDataManager.<Optional<UUID>>createKey(EntityThief.class, DataSerializers.OPTIONAL_UNIQUE_ID);
+
+	private ForgeChunkManager.Ticket chunkTicket;
+	private Set<ChunkPos> loadedChunks = new HashSet<>();
+	private ChunkPos lastCenterChunk;
 
 	public EntityThief(World worldIn) {
 		super(worldIn);
 		this.setSize(0.5F, 1.8F);
 		this.setCanPickUpLoot(true);
 		// Enable door interaction for pathfinding
-		((net.minecraft.pathfinding.PathNavigateGround)this.getNavigator()).setBreakDoors(true);
-		((net.minecraft.pathfinding.PathNavigateGround)this.getNavigator()).setEnterDoors(true);
+		net.minecraft.pathfinding.PathNavigateGround navigator = (net.minecraft.pathfinding.PathNavigateGround)this.getNavigator();
+		navigator.setBreakDoors(true);
+		navigator.setEnterDoors(true);
+		navigator.setCanSwim(true);
 	}
 
 	@Override
 	protected void initEntityAI() {
-		// Robbery system AI (highest priority)
-		this.tasks.addTask(0, new EntityAISwimming(this)); // Swim AI - highest priority to prevent drowning
-		this.tasks.addTask(1, new ThiefAIEscapeWithLoot(this)); // Escape with loot bag
-		this.tasks.addTask(2, new ThiefAIPickupLootBag(this)); // Pick up full loot bag
-		this.tasks.addTask(3, new ThiefAIStealToLootBag(this)); // Steal from chests to loot bag
-		this.tasks.addTask(4, new EntityAIOpenDoor(this, true)); // Open doors
+		this.tasks.addTask(0, new EntityAISwimming(this));
+		this.tasks.addTask(1, new ThiefAIEscapeWithLoot(this));
+		this.tasks.addTask(2, new ThiefAIPickupLootBag(this));
+		this.tasks.addTask(3, new ThiefAIStealToLootBag(this));
+		this.tasks.addTask(4, new EntityAIOpenDoor(this, true));
 		
-		// Combat and movement AI
 		this.tasks.addTask(5, new ThiefAIRunBehindTarget(this, 2.0D));
 		this.tasks.addTask(6, new EntityAIAttackMelee(this, 1.3D, false));
 		this.tasks.addTask(7, new ThiefAIFollowOwner(this, 1.3D, 5.0F, 3.0F));
@@ -62,11 +71,23 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 
 		this.targetTasks.addTask(1, new ThiefAIOwnerHurtByTarget(this));
 		this.targetTasks.addTask(2, new ThiefAIOwnerHurtTarget(this));
-		this.targetTasks.addTask(3, new EntityAIHurtByTarget(this, true, new Class[0]));
+		this.targetTasks.addTask(3, new EntityAIHurtByTarget(this, true, new Class[0]) {
+			@Override
+			public boolean shouldExecute() {
+				// Don't target enemies while escaping
+				if (EntityThief.this.isEscaping()) {
+					return false;
+				}
+				return super.shouldExecute();
+			}
+		});
 		this.targetTasks.addTask(4, new EntityAINearestAttackableTarget<EntityPlayer>(this, EntityPlayer.class, true) {
 			@Override
 			public boolean shouldExecute() {
-				// Always hostile when holding an idol, otherwise follow normal rules
+				// Don't target players while escaping
+				if (EntityThief.this.isEscaping()) {
+					return false;
+				}
 				if (!EntityThief.this.dataManager.get(IS_STEALING)) {
 					return super.shouldExecute();
 				}
@@ -101,6 +122,7 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 	protected void entityInit() {
 		super.entityInit();
 		this.dataManager.register(IS_STEALING, false);
+		this.dataManager.register(IS_ESCAPING, false);
 		this.dataManager.register(OWNER_UNIQUE_ID, Optional.absent());
 	}
 
@@ -110,6 +132,14 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 
 	public void setNeutral(boolean neutral) {
 		this.dataManager.set(IS_STEALING, neutral);
+	}
+
+	public boolean isEscaping() {
+		return this.dataManager.get(IS_ESCAPING);
+	}
+
+	public void setEscaping(boolean escaping) {
+		this.dataManager.set(IS_ESCAPING, escaping);
 	}
 
 	public boolean isOwner(Entity entityIn) {
@@ -176,6 +206,90 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 	@Override
 	public void onLivingUpdate() {
 		super.onLivingUpdate();
+	}
+
+	/**
+	 * Enables chunk loading for this thief to prevent despawning during escape.
+	 */
+	public void enableChunkLoading() {
+		if (world.isRemote || chunkTicket != null) {
+			return;
+		}
+
+		chunkTicket = ForgeChunkManager.requestTicket(Thieves.instance, world, ForgeChunkManager.Type.ENTITY);
+		if (chunkTicket != null) {
+			chunkTicket.bindEntity(this);
+			updateLoadedChunk();
+		}
+	}
+
+	/**
+	 * Updates the chunks being force-loaded to follow the thief (3x3 grid, 1 chunk radius).
+	 */
+	public void updateLoadedChunk() {
+		if (chunkTicket == null || world.isRemote) {
+			return;
+		}
+
+		ChunkPos currentChunk = new ChunkPos(this.getPosition());
+		
+		// Only update if thief moved to a different chunk
+		if (!currentChunk.equals(lastCenterChunk)) {
+			// Unload old chunks
+			for (ChunkPos chunk : loadedChunks) {
+				ForgeChunkManager.unforceChunk(chunkTicket, chunk);
+			}
+			loadedChunks.clear();
+			
+			// Load 3x3 grid around current position (1 chunk radius)
+			for (int x = -1; x <= 1; x++) {
+				for (int z = -1; z <= 1; z++) {
+					ChunkPos chunkToLoad = new ChunkPos(currentChunk.x + x, currentChunk.z + z);
+					ForgeChunkManager.forceChunk(chunkTicket, chunkToLoad);
+					loadedChunks.add(chunkToLoad);
+				}
+			}
+			
+			lastCenterChunk = currentChunk;
+		}
+	}
+
+	/**
+	 * Releases the chunk loading ticket.
+	 */
+	public void releaseChunkTicket() {
+		if (chunkTicket != null) {
+			// Unload all chunks
+			for (ChunkPos chunk : loadedChunks) {
+				ForgeChunkManager.unforceChunk(chunkTicket, chunk);
+			}
+			loadedChunks.clear();
+			
+			ForgeChunkManager.releaseTicket(chunkTicket);
+			chunkTicket = null;
+			lastCenterChunk = null;
+		}
+	}
+
+	@Override
+	public void onEntityUpdate() {
+		super.onEntityUpdate();
+		// Update loaded chunk every tick if we have a ticket
+		if (chunkTicket != null) {
+			updateLoadedChunk();
+		}
+	}
+
+	@Override
+	public void setDead() {
+		releaseChunkTicket();
+		super.setDead();
+	}
+
+	@Override
+	public void onRemovedFromWorld() {
+		releaseChunkTicket();
+		super.onRemovedFromWorld();
 	}
 
 	public boolean hasOwner() {

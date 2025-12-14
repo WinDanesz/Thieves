@@ -274,6 +274,11 @@ public class PlayerBaseDetector {
 			return; // Server-side only
 		}
 
+		// Skip auto-detection if base was manually set
+		if (cap.isManuallySetBase()) {
+			return;
+		}
+
 		BlockPos detectedBase = detectPlayerBase(player, cap);
 
 		// Log if base location changed significantly

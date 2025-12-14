@@ -91,6 +91,14 @@ public class RobberySpawner {
 
 		Thieves.LOGGER.info("Successfully spawned {} thieves for robbery", spawnedCount);
 
+		// Notify the player
+		if (spawnedCount > 0) {
+			net.minecraft.util.text.TextComponentString message = new net.minecraft.util.text.TextComponentString(
+					net.minecraft.util.text.TextFormatting.RED + "Your base is being robbed by " + 
+					(spawnedCount > 1 ? spawnedCount + " thieves" : "a thief") + "!");
+			player.sendMessage(message);
+		}
+
 		// Mark robbery as completed
 		cap.completeRobbery(world);
 
@@ -200,10 +208,10 @@ public class RobberySpawner {
 		// Pick a random chest as reference
 		BlockPos referenceChest = chestLocations.get(RANDOM.nextInt(chestLocations.size()));
 
-		// Try to find a valid position 5-16 blocks from the chest
+		// Try to find a valid position 2-6 blocks from the chest
 		for (int attempt = 0; attempt < 50; attempt++) {
-			int offsetX = 5 + RANDOM.nextInt(12);
-			int offsetZ = 5 + RANDOM.nextInt(12);
+			int offsetX = 2 + RANDOM.nextInt(5);
+			int offsetZ = 2 + RANDOM.nextInt(5);
 
 			if (RANDOM.nextBoolean()) offsetX = -offsetX;
 			if (RANDOM.nextBoolean()) offsetZ = -offsetZ;

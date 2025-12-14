@@ -411,7 +411,7 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 	}
 
 	private double getStealingSpeed() {
-		double baseSpeed = 1.0D;
+		double baseSpeed = 1.5D;
 		if (thief instanceof EntityMasterThief) {
 			baseSpeed *= ((EntityMasterThief) thief).getStealingSpeedMultiplier();
 		}

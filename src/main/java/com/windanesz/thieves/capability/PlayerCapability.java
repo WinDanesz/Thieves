@@ -50,6 +50,7 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	// Base detection
 	public BlockPos baseLocation = null;              // Detected base position
 	public int baseDimension = 0;                     // Base dimension ID
+	private boolean manuallySetBase = false;          // Whether base was manually set (vs auto-detected)
 	private java.util.Map<Long, Integer> chunkVisits = new java.util.HashMap<>();      // ChunkPos hash -> visit count
 	private java.util.Map<Long, Long> chunkVisitTimestamps = new java.util.HashMap<>(); // ChunkPos hash -> first visit time
 	public int chestCountAtBase = 0;                  // Number of chests at base
@@ -114,6 +115,20 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 		if (!event.getEntity().world.isRemote && event.getEntity() instanceof EntityPlayerMP) {
 			PlayerCapability data = PlayerCapability.get((EntityPlayer) event.getEntity());
 			if (data != null) data.sync();
+		}
+	}
+
+	@SubscribeEvent
+	public static void onPlayerSleep(net.minecraftforge.event.entity.player.PlayerSleepInBedEvent event) {
+		if (!event.getEntityPlayer().world.isRemote) {
+			EntityPlayer player = event.getEntityPlayer();
+			PlayerCapability cap = PlayerCapability.get(player);
+			
+			if (cap != null && !cap.isManuallySetBase()) {
+				// Set base location to bed position
+				BlockPos bedPos = event.getPos();
+				cap.setManualBase(bedPos, player.dimension);
+			}
 		}
 	}
 
@@ -204,6 +219,36 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 		this.scoutWarningActive = false;
 		this.scoutVisitCount = 0;
 		sync();
+	}
+
+	/**
+	 * Manually sets the player's base location.
+	 */
+	public void setManualBase(BlockPos pos, int dimension) {
+		this.baseLocation = pos;
+		this.baseDimension = dimension;
+		this.manuallySetBase = true;
+		this.lastBaseDetectionTime = System.currentTimeMillis();
+		sync();
+	}
+
+	/**
+	 * Clears the manually set base and re-enables auto-detection.
+	 */
+	public void clearManualBase() {
+		this.manuallySetBase = false;
+		this.baseLocation = null;
+		this.baseDimension = 0;
+		this.chestCountAtBase = 0;
+		this.chestValueScore = 0.0F;
+		sync();
+	}
+
+	/**
+	 * Returns whether the base was manually set.
+	 */
+	public boolean isManuallySetBase() {
+		return this.manuallySetBase;
 	}
 
 	/**
@@ -343,6 +388,7 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 			properties.setLong("baseLocation", baseLocation.toLong());
 		}
 		properties.setInteger("baseDimension", baseDimension);
+		properties.setBoolean("manuallySetBase", manuallySetBase);
 		properties.setInteger("chestCountAtBase", chestCountAtBase);
 		properties.setFloat("chestValueScore", chestValueScore);
 		properties.setLong("lastBaseDetectionTime", lastBaseDetectionTime);
@@ -389,6 +435,7 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 				this.baseLocation = BlockPos.fromLong(nbt.getLong("baseLocation"));
 			}
 			this.baseDimension = nbt.getInteger("baseDimension");
+			this.manuallySetBase = nbt.getBoolean("manuallySetBase");
 			this.chestCountAtBase = nbt.getInteger("chestCountAtBase");
 			this.chestValueScore = nbt.getFloat("chestValueScore");
 			this.lastBaseDetectionTime = nbt.getLong("lastBaseDetectionTime");

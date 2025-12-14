@@ -3,6 +3,7 @@ package com.windanesz.thieves.init;
 import com.windanesz.thieves.Thieves;
 import com.windanesz.thieves.item.ItemLootBag;
 import net.minecraft.block.Block;
+import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemBlock;
 import net.minecraftforge.event.RegistryEvent;
@@ -45,6 +46,7 @@ public class ModItems {
 		ItemBlock itemBlock = new ItemLootBag(block);
 		itemBlock.setRegistryName(block.getRegistryName());
 		registry.register(itemBlock);
+		itemBlock.setCreativeTab(CreativeTabs.MISC);
 	}
 
 	public static void registerItem(IForgeRegistry<Item> registry, String name, Item item) {
