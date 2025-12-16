@@ -48,6 +48,7 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 	public static final ResourceLocation LOOT_TABLE = new ResourceLocation(Thieves.MODID, "entities/thief");
 	protected static final DataParameter<Boolean> IS_STEALING = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
 	protected static final DataParameter<Boolean> IS_ESCAPING = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
+	protected static final DataParameter<Boolean> IS_ROBBERY_THIEF = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
 	protected static final DataParameter<Optional<UUID>> OWNER_UNIQUE_ID = EntityDataManager.<Optional<UUID>>createKey(EntityThief.class, DataSerializers.OPTIONAL_UNIQUE_ID);
 
 	private ForgeChunkManager.Ticket chunkTicket;
@@ -71,14 +72,15 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 		this.tasks.addTask(1, new ThiefAIEscapeWithLoot(this));
 		this.tasks.addTask(2, new ThiefAIPickupLootBag(this));
 		this.tasks.addTask(3, new ThiefAIStealToLootBag(this));
-		this.tasks.addTask(4, new EntityAIOpenDoor(this, true));
+		this.tasks.addTask(4, new ThiefAIEscortToHideout(this));
+		this.tasks.addTask(5, new EntityAIOpenDoor(this, true));
 		
-		this.tasks.addTask(5, new ThiefAIRunBehindTarget(this, 2.0D));
-		this.tasks.addTask(6, new EntityAIAttackRangedBow(this, 1.0D, 20, 15.0F));
-		this.tasks.addTask(6, new EntityAIAttackMelee(this, 1.3D, false));
-		this.tasks.addTask(7, new ThiefAIFollowOwner(this, 1.3D, 5.0F, 3.0F));
-		this.tasks.addTask(8, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
-		this.tasks.addTask(9, new EntityAILookIdle(this));
+		this.tasks.addTask(6, new ThiefAIRunBehindTarget(this, 2.0D));
+		this.tasks.addTask(7, new EntityAIAttackRangedBow(this, 1.0D, 20, 15.0F));
+		this.tasks.addTask(7, new EntityAIAttackMelee(this, 1.3D, false));
+		this.tasks.addTask(8, new ThiefAIFollowOwner(this, 1.3D, 5.0F, 3.0F));
+		this.tasks.addTask(9, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
+		this.tasks.addTask(10, new EntityAILookIdle(this));
 
 		this.targetTasks.addTask(1, new ThiefAIOwnerHurtByTarget(this));
 		this.targetTasks.addTask(2, new ThiefAIOwnerHurtTarget(this));
@@ -134,6 +136,7 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 		super.entityInit();
 		this.dataManager.register(IS_STEALING, false);
 		this.dataManager.register(IS_ESCAPING, false);
+		this.dataManager.register(IS_ROBBERY_THIEF, false);
 		this.dataManager.register(OWNER_UNIQUE_ID, Optional.absent());
 	}
 
@@ -151,6 +154,14 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 
 	public void setEscaping(boolean escaping) {
 		this.dataManager.set(IS_ESCAPING, escaping);
+	}
+	
+	public boolean isRobberyThief() {
+		return this.dataManager.get(IS_ROBBERY_THIEF);
+	}
+	
+	public void setRobberyThief(boolean isRobberyThief) {
+		this.dataManager.set(IS_ROBBERY_THIEF, isRobberyThief);
 	}
 
 	public boolean isOwner(Entity entityIn) {
@@ -259,6 +270,8 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 		} else {
 			compound.setString("OwnerUUID", this.getOwnerId().toString());
 		}
+		
+		compound.setBoolean("IsRobberyThief", this.isRobberyThief());
 	}
 
 	public void readEntityFromNBT(NBTTagCompound compound) {
@@ -273,6 +286,10 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 		}
 		if (!s.isEmpty()) {
 			this.setOwnerId(UUID.fromString(s));
+		}
+		
+		if (compound.hasKey("IsRobberyThief")) {
+			this.setRobberyThief(compound.getBoolean("IsRobberyThief"));
 		}
 	}
 

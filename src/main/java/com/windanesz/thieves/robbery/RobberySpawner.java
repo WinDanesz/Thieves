@@ -166,6 +166,9 @@ public class RobberySpawner {
 
 		thief.setPosition(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
 		
+		// Mark as robbery thief for tracking
+		thief.setRobberyThief(true);
+		
 		// Equip weapon based on completed robberies count
 		thief.equipWeaponBasedOnRaidCount(completedRobberies);
 		
