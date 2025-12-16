@@ -83,7 +83,7 @@ public class RobberySpawner {
 		int spawnedCount = 0;
 		for (int i = 0; i < thiefCount; i++) {
 			boolean isMaster = shouldSpawnMaster && i == 0; // First thief is master if applicable
-			EntityThief thief = spawnThief(world, lootBagPos, chestLocations, isMaster);
+			EntityThief thief = spawnThief(world, lootBagPos, chestLocations, isMaster, cap.completedRobberies);
 			if (thief != null) {
 				spawnedCount++;
 			}
@@ -147,7 +147,7 @@ public class RobberySpawner {
 	/**
 	 * Spawns a thief (regular or master) near the loot bag.
 	 */
-	private static EntityThief spawnThief(World world, BlockPos lootBagPos, List<BlockPos> chestLocations, boolean isMaster) {
+	private static EntityThief spawnThief(World world, BlockPos lootBagPos, List<BlockPos> chestLocations, boolean isMaster, int completedRobberies) {
 		// Find spawn position 8-16 blocks from loot bag
 		BlockPos spawnPos = findThiefSpawnPos(world, lootBagPos, 8, 16);
 
@@ -165,6 +165,9 @@ public class RobberySpawner {
 		}
 
 		thief.setPosition(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
+		
+		// Equip weapon based on completed robberies count
+		thief.equipWeaponBasedOnRaidCount(completedRobberies);
 		
 		// Store loot bag and chest positions in thief's NBT for AI tasks
 		// (This would require adding fields to EntityThief or using a capability)

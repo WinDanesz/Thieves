@@ -34,8 +34,9 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	private int pathfindingFailures = 0; // Track consecutive pathfinding failures
 	private boolean escapeInitiated = false; // Track if escape started (continue even if bag is lost)
 
-	private static final int MAX_ESCAPE_TIME = 6000; // 5 minutes
-	private static final double ESCAPE_DISTANCE = 80.0D; // Distance from base to be "safe"
+	private static final int MAX_ESCAPE_TIME = 1200; // 1 minute timeout when no hideout
+	private static final int MAX_ESCAPE_TIME_WITH_HIDEOUT = 3600; // 3 minutes when navigating to hideout
+	private static final double ESCAPE_DISTANCE = 50.0D; // Distance from base to be "safe"
 	private static final double ESCAPE_SPEED = 1.5D;
 	private static final double HIDEOUT_SEARCH_RADIUS = 200.0D;
 	private static final int DEPOSIT_TIME = 40; // 2 seconds to deposit loot
@@ -127,6 +128,13 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 			Thieves.LOGGER.info("Thief has escaped! Creating stash and despawning");
 			createStashAndDespawn();
 			return;
+		}
+		
+		// Log progress every 5 seconds when no hideout exists
+		if (targetHideout == null && escapeTimer % 100 == 0) {
+			double distFromOrigin = escapeOrigin != null ? Math.sqrt(thief.getDistanceSq(escapeOrigin)) : 0;
+			Thieves.LOGGER.info("Thief escaping without hideout - Distance from origin: {}, Time: {}/{}", 
+				(int)distFromOrigin, escapeTimer, MAX_ESCAPE_TIME);
 		}
 
 		// If at hideout, handle deposit
@@ -288,15 +296,25 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 		// If navigating to hideout, check if we've arrived
 		if (targetHideout != null) {
 			double distSq = thief.getDistanceSq(targetHideout);
-			return distSq < 16.0D; // Within 4 blocks of hideout
+			if (distSq < 16.0D) { // Within 4 blocks of hideout
+				return true;
+			}
+			
+			// Longer timeout when navigating to existing hideout
+			if (escapeTimer >= MAX_ESCAPE_TIME_WITH_HIDEOUT) {
+				Thieves.LOGGER.info("Thief timeout while navigating to hideout at {}: {} ticks", targetHideout, escapeTimer);
+				return true;
+			}
+			return false;
 		}
 		
-		// Otherwise, escape if far enough from base or time limit reached
-		if (escapeOrigin != null && thief.getDistanceSq(escapeOrigin) > ESCAPE_DISTANCE * ESCAPE_DISTANCE) {
+		// No hideout - shorter timeout
+		if (escapeTimer >= MAX_ESCAPE_TIME) {
+			Thieves.LOGGER.info("Thief escaped via timeout (no hideout): {} ticks", escapeTimer);
 			return true;
 		}
 		
-		return escapeTimer >= MAX_ESCAPE_TIME;
+		return false;
 	}
 
 	private void createStashAndDespawn() {

@@ -8,11 +8,14 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.IEntityOwnable;
+import net.minecraft.entity.IRangedAttackMob;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.ai.*;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.entity.projectile.EntityArrow;
+import net.minecraft.entity.projectile.EntityTippedArrow;
 import net.minecraft.init.Blocks;
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraft.util.math.ChunkPos;
@@ -31,6 +34,7 @@ import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundEvent;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 import net.minecraftforge.items.ItemStackHandler;
 
@@ -39,7 +43,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-public class EntityThief extends EntityMob implements IEntityOwnable {
+public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAttackMob {
 
 	public static final ResourceLocation LOOT_TABLE = new ResourceLocation(Thieves.MODID, "entities/thief");
 	protected static final DataParameter<Boolean> IS_STEALING = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
@@ -70,6 +74,7 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 		this.tasks.addTask(4, new EntityAIOpenDoor(this, true));
 		
 		this.tasks.addTask(5, new ThiefAIRunBehindTarget(this, 2.0D));
+		this.tasks.addTask(6, new EntityAIAttackRangedBow(this, 1.0D, 20, 15.0F));
 		this.tasks.addTask(6, new EntityAIAttackMelee(this, 1.3D, false));
 		this.tasks.addTask(7, new ThiefAIFollowOwner(this, 1.3D, 5.0F, 3.0F));
 		this.tasks.addTask(8, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
@@ -171,9 +176,32 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 
 	@Override
 	public boolean attackEntityAsMob(Entity entityIn) {
-		boolean flag = entityIn.attackEntityFrom(DamageSource.causeMobDamage(this), (float) this.getEntityAttribute(SharedMonsterAttributes.ATTACK_DAMAGE).getBaseValue());
+		float damage = (float) this.getEntityAttribute(SharedMonsterAttributes.ATTACK_DAMAGE).getBaseValue();
+		
+		// Add weapon damage from held item's attribute modifiers
+		ItemStack heldItem = this.getHeldItemMainhand();
+		if (!heldItem.isEmpty()) {
+			com.google.common.collect.Multimap<String, net.minecraft.entity.ai.attributes.AttributeModifier> modifiers = 
+				heldItem.getAttributeModifiers(EntityEquipmentSlot.MAINHAND);
+			
+			if (modifiers.containsKey(SharedMonsterAttributes.ATTACK_DAMAGE.getName())) {
+				for (net.minecraft.entity.ai.attributes.AttributeModifier modifier : 
+					modifiers.get(SharedMonsterAttributes.ATTACK_DAMAGE.getName())) {
+					damage += modifier.getAmount();
+				}
+			}
+			
+			// Add enchantment damage bonuses (Sharpness, Smite, Bane of Arthropods, etc.)
+			if (entityIn instanceof EntityLivingBase) {
+				damage += net.minecraft.enchantment.EnchantmentHelper.getModifierForCreature(heldItem, 
+					((EntityLivingBase) entityIn).getCreatureAttribute());
+			}
+		}
+		
+		boolean flag = entityIn.attackEntityFrom(DamageSource.causeMobDamage(this), damage);
 
 		if (flag) {
+			this.applyEnchantments(this, entityIn);
 			this.swingArm(EnumHand.MAIN_HAND);
 		}
 		return flag;
@@ -182,6 +210,45 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 	@Override
 	public boolean processInteract(EntityPlayer player, EnumHand hand) {
 		return super.processInteract(player, hand);
+	}
+	
+	@Override
+	public void attackEntityWithRangedAttack(EntityLivingBase target, float distanceFactor) {
+		EntityArrow arrow = new EntityTippedArrow(this.world, this);
+		double d0 = target.posX - this.posX;
+		double d1 = target.getEntityBoundingBox().minY + (double)(target.height / 3.0F) - arrow.posY;
+		double d2 = target.posZ - this.posZ;
+		double d3 = (double)MathHelper.sqrt(d0 * d0 + d2 * d2);
+		arrow.shoot(d0, d1 + d3 * 0.20000000298023224D, d2, 1.6F, (float)(14 - this.world.getDifficulty().getId() * 4));
+		
+		// Add power enchantment bonus damage
+		ItemStack bow = this.getHeldItemMainhand();
+		if (bow.getItem() == Items.BOW) {
+			int powerLevel = net.minecraft.enchantment.EnchantmentHelper.getEnchantmentLevel(
+				net.minecraft.init.Enchantments.POWER, bow);
+			if (powerLevel > 0) {
+				arrow.setDamage(arrow.getDamage() + (double)powerLevel * 0.5D + 0.5D);
+			}
+			
+			int punchLevel = net.minecraft.enchantment.EnchantmentHelper.getEnchantmentLevel(
+				net.minecraft.init.Enchantments.PUNCH, bow);
+			if (punchLevel > 0) {
+				arrow.setKnockbackStrength(punchLevel);
+			}
+			
+			if (net.minecraft.enchantment.EnchantmentHelper.getEnchantmentLevel(
+				net.minecraft.init.Enchantments.FLAME, bow) > 0) {
+				arrow.setFire(100);
+			}
+		}
+		
+		this.playSound(SoundEvents.ENTITY_SKELETON_SHOOT, 1.0F, 1.0F / (this.getRNG().nextFloat() * 0.4F + 0.8F));
+		this.world.spawnEntity(arrow);
+	}
+	
+	@Override
+	public void setSwingingArms(boolean swingingArms) {
+		// Required by IRangedAttackMob
 	}
 
 	public void writeEntityToNBT(NBTTagCompound compound) {
@@ -498,5 +565,50 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 		BlockPos below = pos.down();
 		IBlockState belowState = world.getBlockState(below);
 		return belowState.isSideSolid(world, below, net.minecraft.util.EnumFacing.UP);
+	}
+	
+	/**
+	 * Equips the thief with a weapon based on raid count.
+	 * Raid count 0-1: No weapon
+	 * Raid count 2-3: Wooden sword
+	 * Raid count 4-5: Stone sword (30% chance for bow)
+	 * Raid count 6+: Iron sword (50% chance for bow)
+	 * Also equips shields (raid 3+, not with bows) and armor (leather at raid 4+, iron at raid 7+)
+	 */
+	public void equipWeaponBasedOnRaidCount(int raidCount) {
+		if (raidCount <= 1) {
+			return; // No weapon for first raid
+		}
+		
+		boolean useBow = false;
+		
+		// Determine if thief uses bow (higher raid count = higher chance)
+		if (raidCount >= 6) {
+			useBow = world.rand.nextFloat() < 0.5F; // 50% chance at raid 6+
+		} else if (raidCount >= 4) {
+			useBow = world.rand.nextFloat() < 0.3F; // 30% chance at raid 4-5
+		}
+		
+		// Equip weapon
+		if (useBow) {
+			this.setItemStackToSlot(EntityEquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+			// Give infinite arrows (tipped arrow in offhand would be consumed, so we rely on IRangedAttackMob spawning arrows)
+		} else {
+			ItemStack weapon;
+			if (raidCount <= 2) {
+				weapon = new ItemStack(Items.WOODEN_SWORD);
+			} else if (raidCount <= 4) {
+				weapon = new ItemStack(Items.STONE_SWORD);
+			} else {
+				weapon = new ItemStack(Items.IRON_SWORD);
+			}
+			this.setItemStackToSlot(EntityEquipmentSlot.MAINHAND, weapon);
+			
+			// Equip shield (raid 3+, only for melee thieves)
+			if (raidCount >= 3) {
+				this.setItemStackToSlot(EntityEquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+			}
+		}
+		
 	}
 }

@@ -227,6 +227,8 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 	 */
 	public void incrementRaidCount() {
 		this.successfulRaids++;
+		// Reset spawn cooldown to allow thieves to spawn again sooner after a successful raid
+		this.spawnCooldown = 6000 + random.nextInt(6000); // 5-10 minutes
 		markDirty();
 	}
 	
@@ -312,6 +314,9 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 			// Spawn the thief
 			EntityThief thief = new EntityThief(world);
 			thief.setPosition(spawnPos.getX() + 0.5D, spawnPos.getY(), spawnPos.getZ() + 0.5D);
+			
+			// Equip weapon based on this hideout's raid count
+			thief.equipWeaponBasedOnRaidCount(this.successfulRaids);
 			
 			// Make thief hostile
 			thief.setNeutral(false);
