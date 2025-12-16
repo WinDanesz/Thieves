@@ -2,6 +2,7 @@ package com.windanesz.thieves;
 
 import com.windanesz.thieves.capability.PlayerCapability;
 import com.windanesz.thieves.command.CommandGetPlayerBase;
+import com.windanesz.thieves.command.CommandRobberyStatus;
 import com.windanesz.thieves.command.CommandSetPlayerBase;
 import com.windanesz.thieves.command.CommandTriggerRobbery;
 import com.windanesz.thieves.init.ModBlocks;
@@ -58,6 +59,7 @@ public class Thieves implements ForgeChunkManager.LoadingCallback {
 		event.registerServerCommand(new CommandTriggerRobbery());
 		event.registerServerCommand(new CommandSetPlayerBase());
 		event.registerServerCommand(new CommandGetPlayerBase());
+		event.registerServerCommand(new CommandRobberyStatus());
 	}
 
 	@Override

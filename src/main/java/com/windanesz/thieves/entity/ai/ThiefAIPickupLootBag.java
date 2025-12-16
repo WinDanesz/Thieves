@@ -132,6 +132,12 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 		}
 
 		TileEntityLootBag lootBag = (TileEntityLootBag) te;
+		
+		// Don't pick up hideout bags - they are meant to stay in place
+		if (lootBag.isHideout()) {
+			return false;
+		}
+		
 		return lootBag.isReadyForPickup(); // Only pick up full bags
 	}
 

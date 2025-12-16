@@ -8,7 +8,6 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Locale;
 
 @Config(modid = Thieves.MODID, name = Thieves.MODNAME)

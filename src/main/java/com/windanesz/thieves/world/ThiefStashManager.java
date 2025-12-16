@@ -35,6 +35,9 @@ public class ThiefStashManager extends WorldSavedData {
 
 	// Dimension ID -> List of stashes
 	private Map<Integer, List<StashData>> stashesByDimension = new HashMap<>();
+	
+	// Dimension ID -> List of hideout positions
+	private Map<Integer, List<BlockPos>> hideoutsByDimension = new HashMap<>();
 
 	public ThiefStashManager() {
 		super(DATA_NAME);
@@ -64,7 +67,7 @@ public class ThiefStashManager extends WorldSavedData {
 	 * @param nearLocation Position near where to create the stash
 	 * @param lootContents The stolen items to store
 	 * @param associatedBase The player's base this stash is associated with
-	 * @return The position where the stash was created, or null if failed
+	 * @return The position of the loot bag, or null if failed
 	 */
 	@Nullable
 	public BlockPos createStash(World world, BlockPos nearLocation, ItemStackHandler lootContents, BlockPos associatedBase) {
@@ -87,8 +90,8 @@ public class ThiefStashManager extends WorldSavedData {
 		// Generate stash structure
 		generateStashStructure(world, stashPos);
 
-		// Place chest with loot
-		placeStashChest(world, stashPos, lootContents);
+		// Place loot bag with loot and get its actual position
+		BlockPos lootBagPos = placeStashChest(world, stashPos, lootContents);
 
 		// Record stash in data
 		StashData stashData = new StashData(stashPos, world.getTotalWorldTime(), dimensionId, associatedBase);
@@ -96,9 +99,9 @@ public class ThiefStashManager extends WorldSavedData {
 
 		markDirty();
 
-		Thieves.LOGGER.info("Created thief stash at {} in dimension {}", stashPos, dimensionId);
+		Thieves.LOGGER.info("Created thief stash at {} (loot bag at {}) in dimension {}", stashPos, lootBagPos, dimensionId);
 
-		return stashPos;
+		return lootBagPos;
 	}
 
 	/**
@@ -139,6 +142,135 @@ public class ThiefStashManager extends WorldSavedData {
 			stashes.removeIf(stash -> stash.position.equals(location));
 			markDirty();
 		}
+	}
+	
+	/**
+	 * Registers a hideout location in the world data.
+	 */
+	public void registerHideout(int dimensionId, BlockPos position) {
+		List<BlockPos> hideouts = hideoutsByDimension.computeIfAbsent(dimensionId, k -> new ArrayList<>());
+		
+		// Don't register if already present
+		if (!hideouts.contains(position)) {
+			hideouts.add(position);
+			markDirty();
+			Thieves.LOGGER.info("Registered hideout at {} in dimension {}", position, dimensionId);
+		}
+	}
+	
+	/**
+	 * Removes a hideout from the registry.
+	 */
+	public void removeHideout(int dimensionId, BlockPos position) {
+		List<BlockPos> hideouts = hideoutsByDimension.get(dimensionId);
+		
+		if (hideouts != null) {
+			hideouts.remove(position);
+			markDirty();
+			Thieves.LOGGER.info("Removed hideout at {} from dimension {}", position, dimensionId);
+		}
+	}
+	
+	/**
+	 * Finds the nearest hideout to a position within a maximum distance.
+	 * Validates that the hideout still exists (has a loot bag).
+	 * @param world The world instance
+	 * @param position The position to search from
+	 * @param maxDistance Maximum distance in blocks
+	 * @return The nearest valid hideout position, or null if none found
+	 */
+	@Nullable
+	public BlockPos getNearestHideout(World world, BlockPos position, double maxDistance) {
+		int dimensionId = world.provider.getDimension();
+		List<BlockPos> hideouts = hideoutsByDimension.get(dimensionId);
+		
+		if (hideouts == null || hideouts.isEmpty()) {
+			Thieves.LOGGER.debug("No hideouts registered in dimension {}", dimensionId);
+			return null;
+		}
+		
+		BlockPos nearest = null;
+		double nearestDistSq = maxDistance * maxDistance;
+		
+		for (BlockPos hideoutPos : hideouts) {
+			double distSq = position.distanceSq(hideoutPos);
+			
+			// Skip if beyond max distance
+			if (distSq >= nearestDistSq) {
+				continue;
+			}
+			
+			// Only validate if chunk is loaded (don't reject unloaded chunks)
+			if (world.isBlockLoaded(hideoutPos)) {
+				if (!isHideoutValidLoaded(world, hideoutPos)) {
+					Thieves.LOGGER.warn("Hideout at {} is loaded but invalid, will clean up later", hideoutPos);
+					continue;
+				}
+			}
+			
+			// This hideout is closest so far
+			nearestDistSq = distSq;
+			nearest = hideoutPos;
+		}
+		
+		if (nearest != null) {
+			Thieves.LOGGER.info("Found nearest hideout at {} (distance: {} blocks)", nearest, Math.sqrt(nearestDistSq));
+		} else {
+			Thieves.LOGGER.info("No valid hideouts found within {} blocks of {}", maxDistance, position);
+		}
+		
+		return nearest;
+	}
+	
+	/**
+	 * Checks if a loaded hideout is still valid.
+	 */
+	private boolean isHideoutValidLoaded(World world, BlockPos position) {
+		if (world.getBlockState(position).getBlock() != ModBlocks.LOOT_BAG) {
+			return false;
+		}
+		
+		TileEntity te = world.getTileEntity(position);
+		if (te instanceof TileEntityLootBag) {
+			return ((TileEntityLootBag) te).isHideout();
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Cleans up invalid hideouts in a dimension (call periodically or when needed).
+	 */
+	public void cleanupInvalidHideouts(World world, int dimensionId) {
+		List<BlockPos> hideouts = hideoutsByDimension.get(dimensionId);
+		if (hideouts == null || hideouts.isEmpty()) {
+			return;
+		}
+		
+		List<BlockPos> invalidHideouts = new ArrayList<>();
+		
+		for (BlockPos hideoutPos : hideouts) {
+			// Only check loaded chunks
+			if (world.isBlockLoaded(hideoutPos)) {
+				if (!isHideoutValidLoaded(world, hideoutPos)) {
+					invalidHideouts.add(hideoutPos);
+				}
+			}
+		}
+		
+		if (!invalidHideouts.isEmpty()) {
+			hideouts.removeAll(invalidHideouts);
+			markDirty();
+			Thieves.LOGGER.info("Cleaned up {} invalid hideouts in dimension {}", invalidHideouts.size(), dimensionId);
+		}
+	}
+	
+	/**
+	 * Checks if there's an active hideout at a specific position.
+	 */
+	public boolean isHideoutActive(int dimensionId, BlockPos position) {
+		List<BlockPos> hideouts = hideoutsByDimension.get(dimensionId);
+		return hideouts != null && hideouts.contains(position);
 	}
 
 	/**
@@ -297,8 +429,9 @@ public class ThiefStashManager extends WorldSavedData {
 
 	/**
 	 * Places the loot bag block at the stash location.
+	 * @return The position where the loot bag was placed
 	 */
-	private void placeStashChest(World world, BlockPos pos, ItemStackHandler lootContents) {
+	private BlockPos placeStashChest(World world, BlockPos pos, ItemStackHandler lootContents) {
 		// Find a suitable position in the 3x3 area at the lower level (y=-1)
 		List<BlockPos> availablePositions = new ArrayList<>();
 		for (int x = -1; x <= 1; x++) {
@@ -333,11 +466,14 @@ public class ThiefStashManager extends WorldSavedData {
 			}
 			lootBag.markDirty();
 		}
+		
+		return bagPos;
 	}
 
 	@Override
 	public void readFromNBT(NBTTagCompound nbt) {
 		stashesByDimension.clear();
+		hideoutsByDimension.clear();
 
 		NBTTagList dimensionsList = nbt.getTagList("dimensions", 10); // 10 = compound
 
@@ -357,6 +493,24 @@ public class ThiefStashManager extends WorldSavedData {
 			}
 
 			stashesByDimension.put(dimensionId, stashes);
+		}
+		
+		// Read hideouts
+		NBTTagList hideoutDimensionsList = nbt.getTagList("hideoutDimensions", 10);
+		for (int i = 0; i < hideoutDimensionsList.tagCount(); i++) {
+			NBTTagCompound dimData = hideoutDimensionsList.getCompoundTagAt(i);
+			int dimensionId = dimData.getInteger("dimensionId");
+			
+			List<BlockPos> hideouts = new ArrayList<>();
+			NBTTagList hideoutsList = dimData.getTagList("hideouts", 10);
+			
+			for (int j = 0; j < hideoutsList.tagCount(); j++) {
+				NBTTagCompound hideoutNBT = hideoutsList.getCompoundTagAt(j);
+				BlockPos pos = BlockPos.fromLong(hideoutNBT.getLong("pos"));
+				hideouts.add(pos);
+			}
+			
+			hideoutsByDimension.put(dimensionId, hideouts);
 		}
 	}
 
@@ -378,6 +532,25 @@ public class ThiefStashManager extends WorldSavedData {
 		}
 
 		compound.setTag("dimensions", dimensionsList);
+		
+		// Write hideouts
+		NBTTagList hideoutDimensionsList = new NBTTagList();
+		for (Map.Entry<Integer, List<BlockPos>> entry : hideoutsByDimension.entrySet()) {
+			NBTTagCompound dimData = new NBTTagCompound();
+			dimData.setInteger("dimensionId", entry.getKey());
+			
+			NBTTagList hideoutsList = new NBTTagList();
+			for (BlockPos pos : entry.getValue()) {
+				NBTTagCompound hideoutNBT = new NBTTagCompound();
+				hideoutNBT.setLong("pos", pos.toLong());
+				hideoutsList.appendTag(hideoutNBT);
+			}
+			
+			dimData.setTag("hideouts", hideoutsList);
+			hideoutDimensionsList.appendTag(dimData);
+		}
+		
+		compound.setTag("hideoutDimensions", hideoutDimensionsList);
 
 		return compound;
 	}

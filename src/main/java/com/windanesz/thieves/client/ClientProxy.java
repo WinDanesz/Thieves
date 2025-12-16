@@ -75,7 +75,6 @@ public class ClientProxy extends CommonProxy {
 		PlayerCapability data = PlayerCapability.get(Minecraft.getMinecraft().player);
 
 		if (data != null) {
-			data.hauntingProgress = message.hauntedProgress;
 			data.robberyProgress = message.robberyProgress;
 			data.completedRobberies = message.completedRobberies;
 			data.scoutWarningActive = message.scoutWarningActive;

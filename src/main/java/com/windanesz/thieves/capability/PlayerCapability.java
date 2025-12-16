@@ -37,7 +37,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	private static final Capability<PlayerCapability> PLAYER_CAPABILITY = null;
 
 	private final EntityPlayer player;
-	public int hauntingProgress = 0;
 
 	// Robbery tracking
 	public float robberyProgress = 0.0F;              // 0-100, triggers robbery at 100
@@ -130,39 +129,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 				cap.setManualBase(bedPos, player.dimension);
 			}
 		}
-	}
-
-	public int getHauntingProgress() {
-		return hauntingProgress;
-	}
-
-	public void setHauntingProgress(int hauntingProgress) {
-		int oldProgress = this.hauntingProgress;
-		this.hauntingProgress = Math.max(0, Math.min(100, hauntingProgress));
-
-		if (this.hauntingProgress > 0) {
-			if (player instanceof EntityPlayerMP) {
-				EntityPlayerMP playerMP = (EntityPlayerMP) player;
-				Advancement advancement = playerMP.getServer().getAdvancementManager().getAdvancement(new ResourceLocation(Thieves.MODID, "haunted"));
-				if (advancement != null) {
-					if (!playerMP.getAdvancements().getProgress(advancement).isDone()) {
-						playerMP.getAdvancements().grantCriterion(advancement, "haunted");
-					}
-				}
-			}
-		}
-
-		if (oldProgress != this.hauntingProgress) {
-			sync();
-		}
-	}
-
-	public void addHauntingProgress(int amount) {
-		setHauntingProgress(this.hauntingProgress + amount);
-	}
-
-	public void reduceHauntingProgress(int amount) {
-		addHauntingProgress(-amount);
 	}
 
 	// ============================================== Robbery System Methods ==============================================
@@ -335,7 +301,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	 * @param respawn True if the player died and is respawning, false if they are just travelling between dimensions.
 	 */
 	public void copyFrom(PlayerCapability data, boolean respawn) {
-		this.hauntingProgress = data.hauntingProgress;
 
 		// Copy robbery system data
 		this.robberyProgress = data.robberyProgress;
@@ -362,7 +327,7 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	 */
 	public void sync() {
 		if (this.player instanceof EntityPlayerMP) {
-			IMessage msg = new PacketPlayerSync.Message(this.hauntingProgress, this.robberyProgress, 
+			IMessage msg = new PacketPlayerSync.Message(this.robberyProgress,
 				this.completedRobberies, this.scoutWarningActive, this.scoutVisitCount);
 			PacketHandler.net.sendTo(msg, (EntityPlayerMP) this.player);
 		}
@@ -373,8 +338,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	public NBTTagCompound serializeNBT() {
 
 		NBTTagCompound properties = new NBTTagCompound();
-		properties.setInteger("hauntingProgress", hauntingProgress);
-
 		// Robbery tracking
 		properties.setFloat("robberyProgress", robberyProgress);
 		properties.setInteger("completedRobberies", completedRobberies);
@@ -420,7 +383,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	public void deserializeNBT(NBTTagCompound nbt) {
 
 		if (nbt != null) {
-			this.hauntingProgress = nbt.getInteger("hauntingProgress");
 
 			// Robbery tracking
 			this.robberyProgress = nbt.getFloat("robberyProgress");
@@ -457,33 +419,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 			}
 		}
 	}
-
-//	@SubscribeEvent
-//	public static void onLivingUpdateEvent(TickEvent.PlayerTickEvent event) {
-//
-//		if (event.player.ticksExisted % 20 == 0 && !event.player.world.isRemote && event.player.world.getDifficulty() != EnumDifficulty.PEACEFUL) {
-//			EntityPlayer player = event.player;
-//			PlayerCapability cap = PlayerCapability.get(player);
-//			if (PlayerCapability.get(player) != null && !player.capabilities.isCreativeMode) {
-//				int hauntingProg = cap.hauntingProgress;
-//				if (hauntingProg > 50) {
-//					if (player.world.rand.nextInt(20) == 0) {
-//						List<EntitySpecter> specters = player.world.getEntitiesWithinAABB(EntitySpecter.class, new AxisAlignedBB(player.getPosition()).grow(30));
-//
-//						if (specters.isEmpty()) {
-//							BlockPos pos = Utils.findNearbyAirSpace(player.world, player.getPosition(), 6);
-//							if (pos != null) {
-//								EntitySpecter specter = new EntitySpecter(player.world);
-//								specter.setPosition(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-//								player.world.spawnEntity(specter);
-//								specter.setAttackTarget(player);
-//							}
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
 
 	public static class Provider implements ICapabilitySerializable<NBTTagCompound> {
 

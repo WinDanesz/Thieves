@@ -195,14 +195,14 @@ public class BlockLootBag extends BlockContainer {
 			}
 
 			// Also handle loot table if present
-			if (player.isCreative() && this.lootTable != null) {
-				LootTable loottable = worldIn.getLootTableManager().getLootTableFromLocation(this.lootTable);
-				LootContext.Builder lootcontext$builder = new LootContext.Builder((WorldServer) worldIn).withPlayer(player).withLuck(player.getLuck());
+			// //if (player.isCreative() && this.lootTable != null) {
+			// 	LootTable loottable = worldIn.getLootTableManager().getLootTableFromLocation(this.lootTable);
+			// 	LootContext.Builder lootcontext$builder = new LootContext.Builder((WorldServer) worldIn).withPlayer(player).withLuck(player.getLuck());
 
-				for (ItemStack itemstack : loottable.generateLootForPools(worldIn.rand, lootcontext$builder.build())) {
-					spawnAsEntity(worldIn, pos, itemstack);
-				}
-			}
+			// 	for (ItemStack itemstack : loottable.generateLootForPools(worldIn.rand, lootcontext$builder.build())) {
+			// 		spawnAsEntity(worldIn, pos, itemstack);
+			// 	}
+			// }
 		}
 		super.onBlockHarvested(worldIn, pos, state, player);
 	}

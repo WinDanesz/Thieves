@@ -2,7 +2,9 @@ package com.windanesz.thieves.entity;
 
 import com.google.common.base.Optional;
 import com.windanesz.thieves.Thieves;
+import com.windanesz.thieves.block.TileEntityLootBag;
 import com.windanesz.thieves.entity.ai.*;
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.IEntityOwnable;
@@ -11,6 +13,7 @@ import net.minecraft.entity.ai.*;
 import net.minecraft.entity.monster.EntityCreeper;
 import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.init.Blocks;
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.init.Items;
@@ -22,11 +25,14 @@ import net.minecraft.network.datasync.DataParameter;
 import net.minecraft.network.datasync.DataSerializers;
 import net.minecraft.network.datasync.EntityDataManager;
 import net.minecraft.server.management.PreYggdrasilConverter;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.SoundEvent;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraftforge.items.ItemStackHandler;
 
 import javax.annotation.Nullable;
 import java.util.HashSet;
@@ -371,5 +377,126 @@ public class EntityThief extends EntityMob implements IEntityOwnable {
 	@Override
 	protected void updateEquipmentIfNeeded(net.minecraft.entity.item.EntityItem itemEntity) {
 		super.updateEquipmentIfNeeded(itemEntity);
+	}
+	
+	/**
+	 * Deposits loot from thief's inventory into a hideout loot bag.
+	 * If hideout bag is full, stores excess in nearby chests or places new ones.
+	 */
+	public void depositLootAtHideout(BlockPos hideoutPos, ItemStackHandler lootContents) {
+		TileEntity te = world.getTileEntity(hideoutPos);
+		if (!(te instanceof TileEntityLootBag)) {
+			Thieves.LOGGER.warn("Hideout at {} no longer has loot bag!", hideoutPos);
+			return;
+		}
+		
+		TileEntityLootBag hideoutBag = (TileEntityLootBag) te;
+		
+		// Try to transfer all items to hideout bag
+		for (int i = 0; i < lootContents.getSlots(); i++) {
+			ItemStack stack = lootContents.getStackInSlot(i);
+			if (!stack.isEmpty()) {
+				if (!hideoutBag.addItem(stack.copy())) {
+					// Hideout bag is full, store in chest
+					storeInNearbyChest(hideoutPos, stack.copy());
+				}
+			}
+		}
+		
+		// Increment raid count
+		hideoutBag.incrementRaidCount();
+		
+		// Clear thief's loot bag
+		this.setItemStackToSlot(EntityEquipmentSlot.OFFHAND, ItemStack.EMPTY);
+		
+		Thieves.LOGGER.info("Thief deposited loot at hideout {}. Raid count: {}", 
+			hideoutPos, hideoutBag.getSuccessfulRaids());
+	}
+	
+	/**
+	 * Stores overflow items in a chest near the hideout.
+	 * Tries to find existing chests first, then places a new one if needed.
+	 */
+	private void storeInNearbyChest(BlockPos hideoutPos, ItemStack stack) {
+		// Search for nearby chests within 5 blocks
+		for (BlockPos checkPos : BlockPos.getAllInBox(
+			hideoutPos.add(-5, -3, -5),
+			hideoutPos.add(5, 3, 5))) {
+			
+			if (world.getBlockState(checkPos).getBlock() == Blocks.CHEST) {
+				TileEntity te = world.getTileEntity(checkPos);
+				if (te instanceof net.minecraft.tileentity.TileEntityChest) {
+					net.minecraft.tileentity.TileEntityChest chest = (net.minecraft.tileentity.TileEntityChest) te;
+					
+					// Try to add to chest
+					for (int i = 0; i < chest.getSizeInventory(); i++) {
+						ItemStack chestStack = chest.getStackInSlot(i);
+						if (chestStack.isEmpty()) {
+							chest.setInventorySlotContents(i, stack);
+							chest.markDirty();
+							Thieves.LOGGER.debug("Stored overflow item in existing chest at {}", checkPos);
+							return;
+						} else if (chestStack.isItemEqual(stack) && chestStack.getCount() + stack.getCount() <= chestStack.getMaxStackSize()) {
+							chestStack.grow(stack.getCount());
+							chest.markDirty();
+							Thieves.LOGGER.debug("Merged overflow item into existing chest at {}", checkPos);
+							return;
+						}
+					}
+				}
+			}
+		}
+		
+		// No chest with space found, place a new chest
+		BlockPos chestPos = findAdjacentAirBlock(hideoutPos);
+		if (chestPos != null) {
+			world.setBlockState(chestPos, Blocks.CHEST.getDefaultState());
+			TileEntity te = world.getTileEntity(chestPos);
+			if (te instanceof net.minecraft.tileentity.TileEntityChest) {
+				net.minecraft.tileentity.TileEntityChest chest = (net.minecraft.tileentity.TileEntityChest) te;
+				chest.setInventorySlotContents(0, stack);
+				chest.markDirty();
+				Thieves.LOGGER.info("Placed new chest at {} for overflow items", chestPos);
+			}
+		} else {
+			Thieves.LOGGER.warn("Could not find space to place chest near hideout at {}", hideoutPos);
+		}
+	}
+	
+	/**
+	 * Finds an air block adjacent to or near a position.
+	 */
+	private BlockPos findAdjacentAirBlock(BlockPos center) {
+		// Check immediate adjacent blocks first
+		for (BlockPos offset : new BlockPos[] {
+			center.north(), center.south(), center.east(), center.west(),
+			center.up(), center.down()
+		}) {
+			if (world.isAirBlock(offset) && canPlaceChest(offset)) {
+				return offset;
+			}
+		}
+		
+		// Check in a 3x3x3 area
+		for (BlockPos checkPos : BlockPos.getAllInBox(
+			center.add(-2, -2, -2),
+			center.add(2, 2, 2))) {
+			
+			if (world.isAirBlock(checkPos) && canPlaceChest(checkPos)) {
+				return checkPos;
+			}
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * Checks if a chest can be placed at this position.
+	 */
+	private boolean canPlaceChest(BlockPos pos) {
+		// Check if block below is solid
+		BlockPos below = pos.down();
+		IBlockState belowState = world.getBlockState(below);
+		return belowState.isSideSolid(world, below, net.minecraft.util.EnumFacing.UP);
 	}
 }

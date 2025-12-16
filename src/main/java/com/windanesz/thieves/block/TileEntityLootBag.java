@@ -1,10 +1,16 @@
 package com.windanesz.thieves.block;
 
 import com.windanesz.thieves.Settings;
+import com.windanesz.thieves.Thieves;
+import com.windanesz.thieves.entity.EntityThief;
+import com.windanesz.thieves.world.ThiefStashManager;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.ITickable;
+import net.minecraft.util.math.AxisAlignedBB;
+import net.minecraft.util.math.BlockPos;
 import net.minecraftforge.items.ItemStackHandler;
 
 import java.util.ArrayList;
@@ -20,6 +26,11 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 	private ItemStackHandler inventory;
 	private Random random = new Random();
 	private boolean readyForPickup = false;
+	
+	// Hideout-specific fields
+	private boolean isHideout = false;
+	private int successfulRaids = 0;
+	private int spawnCooldown = 0; // Cooldown in ticks before next spawn (5-10 minutes)
 
 	public TileEntityLootBag() {
 		this.inventory = new ItemStackHandler(Settings.lootBag.inventorySize) {
@@ -189,9 +200,135 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 		}
 	}
 
+	/**
+	 * Checks if this loot bag is a hideout.
+	 */
+	public boolean isHideout() {
+		return isHideout;
+	}
+	
+	/**
+	 * Sets this loot bag as a hideout. Should only be called when a thief establishes a hideout.
+	 */
+	public void setAsHideout(boolean hideout) {
+		this.isHideout = hideout;
+		markDirty();
+	}
+	
+	/**
+	 * Gets the number of successful raids stored at this hideout.
+	 */
+	public int getSuccessfulRaids() {
+		return successfulRaids;
+	}
+	
+	/**
+	 * Increments the raid count when a thief deposits loot.
+	 */
+	public void incrementRaidCount() {
+		this.successfulRaids++;
+		markDirty();
+	}
+	
+	/**
+	 * Sets the initial raid count (used when a hideout is first established).
+	 */
+	public void setSuccessfulRaids(int count) {
+		this.successfulRaids = count;
+		markDirty();
+	}
+
 	@Override
 	public void update() {
-		// Tick logic if needed (e.g., particles when full)
+		if (world == null || world.isRemote) {
+			return;
+		}
+		
+		// Hideout proximity spawning logic
+		if (isHideout && spawnCooldown > 0) {
+			spawnCooldown--;
+		}
+		
+		if (isHideout && spawnCooldown <= 0) {
+			checkForPlayerProximityAndSpawn();
+		}
+	}
+	
+	/**
+	 * Checks for nearby players and spawns hostile thieves if found.
+	 */
+	private void checkForPlayerProximityAndSpawn() {
+		// Check for players within 16-24 block radius
+		double detectionRadius = 16.0D + random.nextDouble() * 8.0D; // 16-24 blocks
+		
+		AxisAlignedBB searchBox = new AxisAlignedBB(pos).grow(detectionRadius);
+		List<EntityPlayer> nearbyPlayers = world.getEntitiesWithinAABB(EntityPlayer.class, searchBox,
+				player -> player != null && !player.isCreative() && !player.isSpectator());
+		
+		if (!nearbyPlayers.isEmpty()) {
+			// Spawn thieves based on raid count
+			int thievesToSpawn = calculateThiefSpawnCount();
+			
+			for (int i = 0; i < thievesToSpawn; i++) {
+				spawnHostileThief();
+			}
+			
+			// Set cooldown: 5-10 minutes (6000-12000 ticks)
+			spawnCooldown = 6000 + random.nextInt(6000);
+			
+			Thieves.LOGGER.info("Hideout at {} spawned {} thieves. Cooldown: {} ticks", pos, thievesToSpawn, spawnCooldown);
+		}
+	}
+	
+	/**
+	 * Calculates how many thieves to spawn based on successful raids.
+	 * Formula: min(5, 1 + successfulRaids / 3)
+	 */
+	private int calculateThiefSpawnCount() {
+		return Math.min(5, 1 + successfulRaids / 3);
+	}
+	
+	/**
+	 * Spawns a single hostile thief near the hideout.
+	 */
+	private void spawnHostileThief() {
+		// Try to find a valid spawn position within 8 blocks
+		for (int attempt = 0; attempt < 20; attempt++) {
+			double offsetX = (random.nextDouble() - 0.5D) * 16.0D;
+			double offsetZ = (random.nextDouble() - 0.5D) * 16.0D;
+			
+			BlockPos spawnPos = pos.add(offsetX, 0, offsetZ);
+			spawnPos = world.getTopSolidOrLiquidBlock(spawnPos);
+			
+			// Check if position is valid (not in liquid, has space above)
+			if (world.getBlockState(spawnPos).getMaterial().isLiquid()) {
+				continue;
+			}
+			
+			if (!world.isAirBlock(spawnPos.up()) || !world.isAirBlock(spawnPos.up(2))) {
+				continue;
+			}
+			
+			// Spawn the thief
+			EntityThief thief = new EntityThief(world);
+			thief.setPosition(spawnPos.getX() + 0.5D, spawnPos.getY(), spawnPos.getZ() + 0.5D);
+			
+			// Make thief hostile
+			thief.setNeutral(false);
+			
+			// Find nearest player to set as attack target
+			EntityPlayer nearestPlayer = world.getClosestPlayerToEntity(thief, 32.0D);
+			if (nearestPlayer != null && !nearestPlayer.isCreative() && !nearestPlayer.isSpectator()) {
+				thief.setAttackTarget(nearestPlayer);
+			}
+			
+			world.spawnEntity(thief);
+			
+			Thieves.LOGGER.debug("Spawned hostile thief at {}", spawnPos);
+			return;
+		}
+		
+		Thieves.LOGGER.warn("Failed to find valid spawn position near hideout at {}", pos);
 	}
 
 	@Override
@@ -199,6 +336,9 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 		super.writeToNBT(compound);
 		compound.setTag("inventory", inventory.serializeNBT());
 		compound.setBoolean("readyForPickup", readyForPickup);
+		compound.setBoolean("isHideout", isHideout);
+		compound.setInteger("successfulRaids", successfulRaids);
+		compound.setInteger("spawnCooldown", spawnCooldown);
 		return compound;
 	}
 
@@ -209,6 +349,21 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 			inventory.deserializeNBT(compound.getCompoundTag("inventory"));
 		}
 		readyForPickup = compound.getBoolean("readyForPickup");
+		isHideout = compound.getBoolean("isHideout");
+		successfulRaids = compound.getInteger("successfulRaids");
+		spawnCooldown = compound.getInteger("spawnCooldown");
+	}
+	
+	@Override
+	public void invalidate() {
+		super.invalidate();
+		
+		// If this was a hideout, unregister it from the world data
+		if (isHideout && world != null && !world.isRemote) {
+			ThiefStashManager manager = ThiefStashManager.get(world);
+			manager.removeHideout(world.provider.getDimension(), pos);
+			Thieves.LOGGER.info("Hideout at {} was destroyed and unregistered", pos);
+		}
 	}
 }
 
