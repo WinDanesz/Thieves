@@ -6,7 +6,6 @@ import com.windanesz.thieves.Utils;
 import com.windanesz.thieves.capability.PlayerCapability;
 import com.windanesz.thieves.entity.EntityMasterThief;
 import com.windanesz.thieves.entity.EntityThief;
-import com.windanesz.thieves.entity.EntityThiefScout;
 import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.util.PlayerBaseDetector;
 import net.minecraft.entity.player.EntityPlayer;
@@ -108,35 +107,6 @@ public class RobberySpawner {
 	}
 
 	/**
-	 * Spawns a scout thief to warn the player before a robbery.
-	 */
-	public static void spawnScout(EntityPlayer player, PlayerCapability cap) {
-		World world = player.world;
-
-		if (world.isRemote) {
-			return;
-		}
-
-		// Find spawn position near player (32-64 blocks away)
-		BlockPos spawnPos = findScoutSpawnPos(world, player.getPosition());
-
-		if (spawnPos == null) {
-			Thieves.LOGGER.warn("Could not find valid scout spawn position");
-			return;
-		}
-
-		// Spawn scout
-		EntityThiefScout scout = new EntityThiefScout(world);
-		scout.setPosition(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
-		world.spawnEntity(scout);
-
-		// Mark scout as spawned
-		cap.markScoutSpawned(world);
-
-		Thieves.LOGGER.info("Spawned scout for player {} at {}", player.getName(), spawnPos);
-	}
-
-	/**
 	 * Checks if it's currently night time in the world.
 	 */
 	public static boolean isNightTime(World world) {
@@ -158,16 +128,17 @@ public class RobberySpawner {
 
 		// Create thief entity
 		EntityThief thief;
-		if (isMaster) {
-			thief = new EntityMasterThief(world);
-		} else {
-			thief = new EntityThief(world);
-		}
+		//if (isMaster) {
+		//	thief = new EntityMasterThief(world);
+		//} else {
+		thief = new EntityThief(world);
+		//}
 
 		thief.setPosition(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5);
 		
 		// Mark as robbery thief for tracking
 		thief.setRobberyThief(true);
+		//thief.onInitialSpawn(world.getDifficultyForLocation(spawnPos, thief.data));
 		
 		// Equip weapon based on completed robberies count
 		thief.equipWeaponBasedOnRaidCount(completedRobberies);
@@ -236,30 +207,6 @@ public class RobberySpawner {
 
 		// Fallback: place right next to chest
 		return Utils.findNearbyAirSpace(world, referenceChest, 5);
-	}
-
-	/**
-	 * Finds a position to spawn a scout near the player.
-	 */
-	private static BlockPos findScoutSpawnPos(World world, BlockPos playerPos) {
-		// Try to spawn 32-64 blocks away
-		for (int attempt = 0; attempt < 50; attempt++) {
-			int distance = 32 + RANDOM.nextInt(33); // 32-64 blocks
-			double angle = RANDOM.nextDouble() * Math.PI * 2;
-
-			int offsetX = (int) (Math.cos(angle) * distance);
-			int offsetZ = (int) (Math.sin(angle) * distance);
-
-			BlockPos candidatePos = playerPos.add(offsetX, 0, offsetZ);
-			candidatePos = world.getHeight(candidatePos);
-
-			// Check if valid spawn location
-			if (isValidSpawnLocation(world, candidatePos)) {
-				return candidatePos;
-			}
-		}
-
-		return null;
 	}
 
 	/**

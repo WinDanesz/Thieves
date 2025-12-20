@@ -6,7 +6,9 @@ import com.windanesz.thieves.block.TileEntityLootBag;
 import com.windanesz.thieves.entity.ai.*;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.IEntityLivingData;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.entity.IEntityOwnable;
 import net.minecraft.entity.IRangedAttackMob;
 import net.minecraft.entity.SharedMonsterAttributes;
@@ -44,6 +46,9 @@ import java.util.Set;
 import java.util.UUID;
 
 public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAttackMob {
+	// Skin variation support
+	protected static final DataParameter<Integer> SKIN_INDEX = EntityDataManager.createKey(EntityThief.class, DataSerializers.VARINT);
+	private static final int SKIN_VARIATION_COUNT = 5; // Change to your number of skins
 
 	public static final ResourceLocation LOOT_TABLE = new ResourceLocation(Thieves.MODID, "entities/thief");
 	protected static final DataParameter<Boolean> IS_STEALING = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
@@ -138,6 +143,7 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 		this.dataManager.register(IS_ESCAPING, false);
 		this.dataManager.register(IS_ROBBERY_THIEF, false);
 		this.dataManager.register(OWNER_UNIQUE_ID, Optional.absent());
+		this.dataManager.register(SKIN_INDEX, -1);
 	}
 
 	public boolean isNeutral() {
@@ -264,20 +270,18 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 
 	public void writeEntityToNBT(NBTTagCompound compound) {
 		super.writeEntityToNBT(compound);
-
 		if (this.getOwnerId() == null) {
 			compound.setString("OwnerUUID", "");
 		} else {
 			compound.setString("OwnerUUID", this.getOwnerId().toString());
 		}
-		
 		compound.setBoolean("IsRobberyThief", this.isRobberyThief());
+		compound.setInteger("SkinIndex", this.getSkinIndex());
 	}
 
 	public void readEntityFromNBT(NBTTagCompound compound) {
 		super.readEntityFromNBT(compound);
 		String s;
-
 		if (compound.hasKey("OwnerUUID", 8)) {
 			s = compound.getString("OwnerUUID");
 		} else {
@@ -287,10 +291,22 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 		if (!s.isEmpty()) {
 			this.setOwnerId(UUID.fromString(s));
 		}
-		
 		if (compound.hasKey("IsRobberyThief")) {
 			this.setRobberyThief(compound.getBoolean("IsRobberyThief"));
 		}
+		if (compound.hasKey("SkinIndex")) {
+			this.setSkinIndex(compound.getInteger("SkinIndex"));
+		}
+	}
+
+	@Override
+	public IEntityLivingData onInitialSpawn(DifficultyInstance difficulty, @Nullable IEntityLivingData livingdata) {
+		livingdata = super.onInitialSpawn(difficulty, livingdata);
+		// If skin index is not set, randomize it (for entities spawned without NBT)
+		if (this.getSkinIndex() < 0) {
+			this.setSkinIndex(this.rand.nextInt(SKIN_VARIATION_COUNT));
+		}
+		return livingdata;
 	}
 
 	@Override
@@ -394,6 +410,27 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 	@Override
 	protected ResourceLocation getLootTable() {
 		return LOOT_TABLE;
+	}
+
+	/**
+	 * Returns the skin index for this thief.
+	 */
+	public int getSkinIndex() {
+		return this.dataManager.get(SKIN_INDEX);
+	}
+
+	/**
+	 * Sets the skin index for this thief.
+	 */
+	public void setSkinIndex(int index) {
+		this.dataManager.set(SKIN_INDEX, index);
+	}
+
+	/**
+	 * Returns the skin name suffix for rendering (e.g. "_0", "_1", ...).
+	 */
+	public String getSkinSuffix() {
+		return "_" + getSkinIndex();
 	}
 
 	@Override

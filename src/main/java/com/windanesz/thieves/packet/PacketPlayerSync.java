@@ -27,18 +27,14 @@ public class PacketPlayerSync implements IMessageHandler<PacketPlayerSync.Messag
 
 		public float robberyProgress;
 		public int completedRobberies;
-		public boolean scoutWarningActive;
-		public int scoutVisitCount;
 
 		// This constructor is required otherwise you'll get errors (used somewhere in fml through reflection)
 		public Message() {
 		}
 
-		public Message(float robberyProgress, int completedRobberies, boolean scoutWarningActive, int scoutVisitCount) {
+		public Message(float robberyProgress, int completedRobberies) {
 			this.robberyProgress = robberyProgress;
 			this.completedRobberies = completedRobberies;
-			this.scoutWarningActive = scoutWarningActive;
-			this.scoutVisitCount = scoutVisitCount;
 		}
 
 		@Override
@@ -46,8 +42,6 @@ public class PacketPlayerSync implements IMessageHandler<PacketPlayerSync.Messag
 
 			this.robberyProgress = buf.readFloat();
 			this.completedRobberies = buf.readInt();
-			this.scoutWarningActive = buf.readBoolean();
-			this.scoutVisitCount = buf.readInt();
 
 		}
 
@@ -56,8 +50,6 @@ public class PacketPlayerSync implements IMessageHandler<PacketPlayerSync.Messag
 		public void toBytes(ByteBuf buf) {
 			buf.writeFloat(robberyProgress);
 			buf.writeInt(completedRobberies);
-			buf.writeBoolean(scoutWarningActive);
-			buf.writeInt(scoutVisitCount);
 		}
 	}
 }

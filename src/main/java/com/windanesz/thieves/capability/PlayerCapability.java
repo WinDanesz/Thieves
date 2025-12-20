@@ -42,9 +42,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	public float robberyProgress = 0.0F;              // 0-100, triggers robbery at 100
 	public int completedRobberies = 0;                // For difficulty scaling
 	public long lastRobberyTime = 0L;                 // World time of last robbery
-	public boolean scoutWarningActive = false;        // Scout currently active
-	public long lastScoutSpawnTime = 0L;              // When last scout appeared
-	public int scoutVisitCount = 0;                   // Number of scout visits this cycle
 
 	// Base detection
 	public BlockPos baseLocation = null;              // Detected base position
@@ -182,8 +179,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	 */
 	public void resetRobberyProgress() {
 		this.robberyProgress = 0.0F;
-		this.scoutWarningActive = false;
-		this.scoutVisitCount = 0;
 		sync();
 	}
 
@@ -242,54 +237,12 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	}
 
 	/**
-	 * Checks if a scout warning should be spawned.
-	 */
-	public boolean shouldSpawnScout(World world) {
-		// Feature disabled
-		if (!com.windanesz.thieves.Settings.robbery.enableScouts) return false;
-
-		// Already have an active scout
-		if (scoutWarningActive) return false;
-
-		// Progress threshold for scout warning
-		if (robberyProgress < 75.0F) return false;
-
-		// Must have a detected base
-		if (baseLocation == null) return false;
-
-		// Check time since last scout
-		long timeSinceLastScout = world.getTotalWorldTime() - lastScoutSpawnTime;
-		long minScoutInterval = 24000; // Minimum 1 day between scouts
-		if (timeSinceLastScout < minScoutInterval) return false;
-
-		return true;
-	}
-
-	/**
 	 * Marks that a robbery has been completed.
 	 */
 	public void completeRobbery(World world) {
 		completedRobberies++;
 		lastRobberyTime = world.getTotalWorldTime();
 		resetRobberyProgress();
-	}
-
-	/**
-	 * Marks that a scout has been spawned.
-	 */
-	public void markScoutSpawned(World world) {
-		scoutWarningActive = true;
-		lastScoutSpawnTime = world.getTotalWorldTime();
-		scoutVisitCount++;
-		sync();
-	}
-
-	/**
-	 * Clears the scout warning flag (called when scout despawns).
-	 */
-	public void clearScoutWarning() {
-		scoutWarningActive = false;
-		sync();
 	}
 
 	/**
@@ -306,9 +259,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 		this.robberyProgress = data.robberyProgress;
 		this.completedRobberies = data.completedRobberies;
 		this.lastRobberyTime = data.lastRobberyTime;
-		this.scoutWarningActive = data.scoutWarningActive;
-		this.lastScoutSpawnTime = data.lastScoutSpawnTime;
-		this.scoutVisitCount = data.scoutVisitCount;
 
 		// Copy base detection data
 		this.baseLocation = data.baseLocation;
@@ -328,7 +278,7 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	public void sync() {
 		if (this.player instanceof EntityPlayerMP) {
 			IMessage msg = new PacketPlayerSync.Message(this.robberyProgress,
-				this.completedRobberies, this.scoutWarningActive, this.scoutVisitCount);
+				this.completedRobberies);
 			PacketHandler.net.sendTo(msg, (EntityPlayerMP) this.player);
 		}
 	}
@@ -342,9 +292,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 		properties.setFloat("robberyProgress", robberyProgress);
 		properties.setInteger("completedRobberies", completedRobberies);
 		properties.setLong("lastRobberyTime", lastRobberyTime);
-		properties.setBoolean("scoutWarningActive", scoutWarningActive);
-		properties.setLong("lastScoutSpawnTime", lastScoutSpawnTime);
-		properties.setInteger("scoutVisitCount", scoutVisitCount);
 
 		// Base detection
 		if (baseLocation != null) {
@@ -388,9 +335,6 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 			this.robberyProgress = nbt.getFloat("robberyProgress");
 			this.completedRobberies = nbt.getInteger("completedRobberies");
 			this.lastRobberyTime = nbt.getLong("lastRobberyTime");
-			this.scoutWarningActive = nbt.getBoolean("scoutWarningActive");
-			this.lastScoutSpawnTime = nbt.getLong("lastScoutSpawnTime");
-			this.scoutVisitCount = nbt.getInteger("scoutVisitCount");
 
 			// Base detection
 			if (nbt.hasKey("baseLocation")) {

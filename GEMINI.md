@@ -1,0 +1,2 @@
+- never do git commits 
+- never run java or gradle

@@ -227,8 +227,8 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 	 */
 	public void incrementRaidCount() {
 		this.successfulRaids++;
-		// Reset spawn cooldown to allow thieves to spawn again sooner after a successful raid
-		this.spawnCooldown = 6000 + random.nextInt(6000); // 5-10 minutes
+		// Reset spawn cooldown to 0 to allow thieves to spawn immediately after a successful raid
+		this.spawnCooldown = 0;
 		markDirty();
 	}
 	

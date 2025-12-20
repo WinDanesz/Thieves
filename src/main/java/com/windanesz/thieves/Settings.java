@@ -54,17 +54,6 @@ public class Settings {
 		@Config.Comment("Enable night-only robberies")
 		public boolean nightOnly = true;
 
-		@Config.Comment("Enable scout warnings before robberies")
-		public boolean enableScouts = true;
-
-		@Config.Comment("Days before robbery that scouts appear (min)")
-		@Config.RangeInt(min = 1, max = 30)
-		public int minScoutWarningDays = 1;
-
-		@Config.Comment("Days before robbery that scouts appear (max)")
-		@Config.RangeInt(min = 1, max = 30)
-		public int maxScoutWarningDays = 3;
-
 		@Config.Comment("Enable master thief variant")
 		public boolean enableMasterThief = true;
 

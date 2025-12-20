@@ -37,7 +37,7 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	private static final int MAX_ESCAPE_TIME = 1200; // 1 minute timeout when no hideout
 	private static final int MAX_ESCAPE_TIME_WITH_HIDEOUT = 3600; // 3 minutes when navigating to hideout
 	private static final double ESCAPE_DISTANCE = 50.0D; // Distance from base to be "safe"
-	private static final double ESCAPE_SPEED = 1.5D;
+	private static final double ESCAPE_SPEED = 1.7D;
 	private static final double HIDEOUT_SEARCH_RADIUS = 200.0D;
 	private static final int DEPOSIT_TIME = 40; // 2 seconds to deposit loot
 	private static final int MAX_PATHFINDING_FAILURES = 100; // Abandon hideout after 100 failed pathfinding attempts

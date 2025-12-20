@@ -56,9 +56,9 @@ public class RobberyEventHandler {
 			}
 
 			// Check for scout spawn
-			if (cap.shouldSpawnScout(player.world)) {
-				RobberySpawner.spawnScout(player, cap);
-			}
+			//if (cap.shouldSpawnScout(player.world)) {
+			//	RobberySpawner.spawnScout(player, cap);
+			//}
 		}
 	}
 

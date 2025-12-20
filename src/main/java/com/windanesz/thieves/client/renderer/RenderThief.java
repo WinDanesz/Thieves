@@ -13,7 +13,13 @@ import javax.annotation.Nullable;
 
 public class RenderThief extends RenderBiped<EntityThief> {
 
-	public static final ResourceLocation TEXTURE = new ResourceLocation(Thieves.MODID, "textures/entity/thief_0.png");
+	private static final ResourceLocation[] THIEF_TEXTURES = new ResourceLocation[] {
+			new ResourceLocation(Thieves.MODID, "textures/entity/thief_0.png"),
+			new ResourceLocation(Thieves.MODID, "textures/entity/thief_1.png"),
+			new ResourceLocation(Thieves.MODID, "textures/entity/thief_2.png"),
+			new ResourceLocation(Thieves.MODID, "textures/entity/thief_3.png"),
+			new ResourceLocation(Thieves.MODID, "textures/entity/thief_4.png")
+	};
 
 	public RenderThief(RenderManager rendermanagerIn) {
 		super(rendermanagerIn, new ModelThief(0, false), 0.5f);
@@ -29,7 +35,11 @@ public class RenderThief extends RenderBiped<EntityThief> {
 	@Nullable
 	@Override
 	protected ResourceLocation getEntityTexture(EntityThief entity) {
-		return TEXTURE;
+		int skin = entity.getSkinIndex();
+		if (skin < 0 || skin >= THIEF_TEXTURES.length) {
+			skin = 0;
+		}
+		return THIEF_TEXTURES[skin];
 	}
 
 	@Override

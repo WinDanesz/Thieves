@@ -68,12 +68,6 @@ public class CommandRobberyStatus extends CommandBase {
 				TextFormatting.AQUA + "Robbery Progress: " + TextFormatting.WHITE + 
 				String.format("%.1f%%", progress)));
 
-		// Scout warning
-		if (cap.scoutWarningActive) {
-			sender.sendMessage(new TextComponentString(
-					TextFormatting.RED + "WARNING: Scouts have been spotted!"));
-		}
-
 		// Status
 		if (progress >= 100.0F) {
 			long timeSinceLastRobbery = player.world.getTotalWorldTime() - cap.lastRobberyTime;

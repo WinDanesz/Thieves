@@ -3,7 +3,6 @@ package com.windanesz.thieves.init;
 import com.windanesz.thieves.Thieves;
 import com.windanesz.thieves.entity.EntityMasterThief;
 import com.windanesz.thieves.entity.EntityThief;
-import com.windanesz.thieves.entity.EntityThiefScout;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.event.RegistryEvent;
@@ -32,9 +31,6 @@ public class ModEntities {
 
 		// Register regular thief
 		registry.register(createEntry(EntityThief.class, "thief", TrackingType.LIVING).egg(0xeb42ff, 0x6aeba6).build());
-		
-		// Register thief scout
-		registry.register(createEntry(EntityThiefScout.class, "thief_scout", TrackingType.LIVING).egg(0x8b42ff, 0x42eba6).build());
 		
 		// Register master thief
 		registry.register(createEntry(EntityMasterThief.class, "master_thief", TrackingType.LIVING).egg(0xff4242, 0xa6eb42).build());

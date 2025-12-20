@@ -25,11 +25,12 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 	private EntityThief thiefToFollow;
 	private int despawnTimer = 0;
 	
-	private static final double HIDEOUT_SEARCH_RADIUS = 200.0D;
+	private static final double HIDEOUT_SEARCH_RADIUS = 500.0D;
 	private static final double THIEF_SEARCH_RADIUS = 32.0D;
-	private static final int DESPAWN_DELAY = 100; // 5 seconds before despawning if no hideout
-	private static final double MOVE_SPEED = 1.2D;
+	private static final int DESPAWN_DELAY = 300; // 15 seconds before despawning if no hideout
+	private static final double MOVE_SPEED = 1.7D;
 	private static final double FOLLOW_DISTANCE = 8.0D;
+	private int searchCooldown = 0;
 	
 	public ThiefAIEscortToHideout(EntityThief thief) {
 		this.thief = thief;
@@ -54,11 +55,17 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 			return false;
 		}
 		
-		// Search for nearest hideout
-		ThiefStashManager manager = ThiefStashManager.get(world);
-		targetHideout = manager.getNearestHideout(world, thief.getPosition(), HIDEOUT_SEARCH_RADIUS);
+		// Search for nearest hideout or thief with loot
+		if (targetHideout == null) {
+			ThiefStashManager manager = ThiefStashManager.get(world);
+			targetHideout = manager.getNearestHideout(world, thief.getPosition(), HIDEOUT_SEARCH_RADIUS);
+		}
 		
-		// Execute regardless of whether hideout found (will despawn if none)
+		if (thiefToFollow == null) {
+			thiefToFollow = findNearbyThiefWithLootBag();
+		}
+		
+		// Always execute - will search for targets or despawn
 		return true;
 	}
 	
@@ -105,11 +112,37 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 		targetHideout = null;
 		thiefToFollow = null;
 		despawnTimer = 0;
+		searchCooldown = 0;
 		thief.getNavigator().clearPath();
 	}
 	
 	@Override
 	public void updateTask() {
+		// Periodically retry searching for targets
+		searchCooldown++;
+		if (searchCooldown >= 40) { // Every 2 seconds
+			searchCooldown = 0;
+			
+			if (targetHideout == null) {
+				ThiefStashManager manager = ThiefStashManager.get(world);
+				targetHideout = manager.getNearestHideout(world, thief.getPosition(), HIDEOUT_SEARCH_RADIUS);
+				if (targetHideout != null) {
+					Thieves.LOGGER.info("Robbery thief at {} found hideout at {} during search", 
+						thief.getPosition(), targetHideout);
+					despawnTimer = 0;
+				}
+			}
+			
+			if (thiefToFollow == null) {
+				thiefToFollow = findNearbyThiefWithLootBag();
+				if (thiefToFollow != null) {
+					Thieves.LOGGER.info("Robbery thief at {} found thief with loot at {} during search", 
+						thief.getPosition(), thiefToFollow.getPosition());
+					despawnTimer = 0;
+				}
+			}
+		}
+		
 		// Priority 1: Follow hideout path if we have one
 		if (targetHideout != null) {
 			navigateToHideout();
@@ -120,8 +153,21 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 		if (thiefToFollow != null) {
 			// Check if thief still has loot bag and is alive
 			if (thiefToFollow.isDead || !hasLootBag(thiefToFollow)) {
-				Thieves.LOGGER.debug("Thief to follow no longer has loot bag or is dead, searching for new target");
+				Thieves.LOGGER.debug("Thief to follow no longer has loot bag or is dead, searching for new target or hideout");
 				thiefToFollow = findNearbyThiefWithLootBag();
+				
+				// If no thief found, search for a hideout instead
+				if (thiefToFollow == null && targetHideout == null) {
+					ThiefStashManager manager = ThiefStashManager.get(world);
+					targetHideout = manager.getNearestHideout(world, thief.getPosition(), HIDEOUT_SEARCH_RADIUS);
+					
+					if (targetHideout != null) {
+						Thieves.LOGGER.info("Followed thief disappeared, robbery thief at {} now heading to hideout at {}", 
+							thief.getPosition(), targetHideout);
+						despawnTimer = 0; // Reset despawn timer
+						return;
+					}
+				}
 			}
 			
 			if (thiefToFollow != null) {
@@ -134,7 +180,8 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 		despawnTimer++;
 		
 		if (despawnTimer >= DESPAWN_DELAY) {
-			Thieves.LOGGER.info("Robbery thief at {} despawning (no hideout or thief with loot found)", thief.getPosition());
+			Thieves.LOGGER.info("Robbery thief at {} despawning (no hideout or thief with loot found after {} seconds)", 
+				thief.getPosition(), DESPAWN_DELAY / 20.0);
 			thief.setDead();
 		}
 	}
