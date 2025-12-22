@@ -4,6 +4,10 @@ import com.windanesz.thieves.entity.EntityThief;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.ai.EntityAITarget;
 
+/**
+ * AI task for tamed thieves to attack entities that their owner attacks.
+ * Similar to the wolf's behavior.
+ */
 public class ThiefAIOwnerHurtTarget extends EntityAITarget {
 	EntityThief tameableMob;
 	EntityLivingBase attacker;

@@ -12,6 +12,10 @@ import net.minecraft.world.World;
 
 import javax.annotation.Nullable;
 
+/**
+ * AI task for thieves to run behind their attacker or target.
+ * Useful for tactical positioning or fleeing to a safer spot behind the enemy.
+ */
 public class ThiefAIRunBehindTarget extends EntityAIBase {
 	protected final EntityCreature creature;
 	protected double speed;

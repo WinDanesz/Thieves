@@ -1,12 +1,15 @@
 package com.windanesz.thieves.entity.ai;
 
 import com.windanesz.thieves.Thieves;
+import com.windanesz.thieves.block.TileEntityLootBag;
 import com.windanesz.thieves.entity.EntityThief;
 import com.windanesz.thieves.item.ItemLootBag;
 import com.windanesz.thieves.world.ThiefStashManager;
 import net.minecraft.entity.ai.EntityAIBase;
+import net.minecraft.init.Items;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -24,10 +27,12 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 	private BlockPos targetHideout;
 	private EntityThief thiefToFollow;
 	private int despawnTimer = 0;
+	private int travelTimer = 0;
 	
 	private static final double HIDEOUT_SEARCH_RADIUS = 500.0D;
 	private static final double THIEF_SEARCH_RADIUS = 32.0D;
 	private static final int DESPAWN_DELAY = 300; // 15 seconds before despawning if no hideout
+	private static final int MAX_TRAVEL_TIME = 2400; // 2 minutes to reach target before forced despawn
 	private static final double MOVE_SPEED = 1.7D;
 	private static final double FOLLOW_DISTANCE = 8.0D;
 	private int searchCooldown = 0;
@@ -88,6 +93,7 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 	@Override
 	public void startExecuting() {
 		despawnTimer = 0;
+		travelTimer = 0;
 		thiefToFollow = null;
 		
 		if (targetHideout != null) {
@@ -112,8 +118,21 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 		targetHideout = null;
 		thiefToFollow = null;
 		despawnTimer = 0;
+		travelTimer = 0;
 		searchCooldown = 0;
 		thief.getNavigator().clearPath();
+	}
+	
+	private void dropHeldItems() {
+		// Drop offhand item (likely stolen loot or loot bag)
+		// Don't drop shields as they are part of the thief's equipment
+		ItemStack offhand = thief.getItemStackFromSlot(EntityEquipmentSlot.OFFHAND);
+		if (!offhand.isEmpty() && offhand.getItem() != Items.SHIELD) {
+			thief.entityDropItem(offhand, 0.0F);
+			thief.setItemStackToSlot(EntityEquipmentSlot.OFFHAND, ItemStack.EMPTY);
+		}
+		
+		// Do not drop mainhand item (weapon) as escorts should keep their gear
 	}
 	
 	@Override
@@ -130,6 +149,7 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 					Thieves.LOGGER.info("Robbery thief at {} found hideout at {} during search", 
 						thief.getPosition(), targetHideout);
 					despawnTimer = 0;
+					travelTimer = 0;
 				}
 			}
 			
@@ -139,12 +159,20 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 					Thieves.LOGGER.info("Robbery thief at {} found thief with loot at {} during search", 
 						thief.getPosition(), thiefToFollow.getPosition());
 					despawnTimer = 0;
+					travelTimer = 0;
 				}
 			}
 		}
-		
+
 		// Priority 1: Follow hideout path if we have one
 		if (targetHideout != null) {
+			travelTimer++;
+			if (travelTimer >= MAX_TRAVEL_TIME) {
+				Thieves.LOGGER.info("Robbery thief timed out reaching hideout at {}, despawning", targetHideout);
+				dropHeldItems();
+				thief.setDead();
+				return;
+			}
 			navigateToHideout();
 			return;
 		}
@@ -155,6 +183,7 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 			if (thiefToFollow.isDead || !hasLootBag(thiefToFollow)) {
 				Thieves.LOGGER.debug("Thief to follow no longer has loot bag or is dead, searching for new target or hideout");
 				thiefToFollow = findNearbyThiefWithLootBag();
+				travelTimer = 0; // Reset travel timer as we search for new target
 				
 				// If no thief found, search for a hideout instead
 				if (thiefToFollow == null && targetHideout == null) {
@@ -165,12 +194,20 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 						Thieves.LOGGER.info("Followed thief disappeared, robbery thief at {} now heading to hideout at {}", 
 							thief.getPosition(), targetHideout);
 						despawnTimer = 0; // Reset despawn timer
+						travelTimer = 0; // Reset travel timer
 						return;
 					}
 				}
 			}
 			
 			if (thiefToFollow != null) {
+				travelTimer++;
+				if (travelTimer >= MAX_TRAVEL_TIME) {
+					Thieves.LOGGER.info("Robbery thief timed out following thief, despawning");
+					dropHeldItems();
+					thief.setDead();
+					return;
+				}
 				followThief();
 				return;
 			}
@@ -182,6 +219,7 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 		if (despawnTimer >= DESPAWN_DELAY) {
 			Thieves.LOGGER.info("Robbery thief at {} despawning (no hideout or thief with loot found after {} seconds)", 
 				thief.getPosition(), DESPAWN_DELAY / 20.0);
+			dropHeldItems();
 			thief.setDead();
 		}
 	}
@@ -190,9 +228,18 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 		double distSq = thief.getDistanceSq(targetHideout);
 		
 		if (distSq < 16.0D) {
-			// Reached hideout - despawn
-			Thieves.LOGGER.info("Robbery thief reached hideout at {}, despawning", targetHideout);
-			thief.setDead();
+			// Reached hideout location
+			TileEntity te = world.getTileEntity(targetHideout);
+			if (te instanceof TileEntityLootBag) {
+				// Valid hideout, despawn
+				Thieves.LOGGER.info("Robbery thief reached hideout at {}, despawning", targetHideout);
+				dropHeldItems();
+				thief.setDead();
+			} else {
+				// Hideout missing/destroyed, search for another one
+				Thieves.LOGGER.warn("Hideout at {} is missing, robbery thief searching for new target", targetHideout);
+				targetHideout = null;
+			}
 		} else {
 			// Continue moving to hideout
 			if (thief.getNavigator().noPath()) {

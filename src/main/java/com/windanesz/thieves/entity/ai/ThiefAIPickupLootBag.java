@@ -11,7 +11,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.SoundCategory;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.world.World;
+import java.util.List;
 
 /**
  * AI task for thieves to pick up a full loot bag and convert it to an item.
@@ -167,6 +169,22 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 		
 		// Mark that thief now has the loot
 		thief.setNeutral(true); // Use existing neutral flag to indicate thief has loot
+
+		// Scrape for nearby thieves within 16 blocks radius to escort
+		double radius = 16.0D;
+		List<EntityThief> nearbyThieves = world.getEntitiesWithinAABB(EntityThief.class, 
+			new AxisAlignedBB(thief.getPosition()).grow(radius));
+
+		for (EntityThief otherThief : nearbyThieves) {
+			if (otherThief != thief && !otherThief.isDead) {
+				// Force them to become robbery thieves so they can escort
+				otherThief.setRobberyThief(true);
+				// Clear their path to interrupt current tasks and force re-evaluation
+				otherThief.getNavigator().clearPath();
+				// Clear targets to abandon combat/looting focus
+				otherThief.setAttackTarget(null);
+			}
+		}
 	}
 
 	private boolean hasLootBag() {

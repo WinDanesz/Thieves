@@ -3,6 +3,7 @@ package com.windanesz.thieves.entity.ai;
 import com.windanesz.thieves.Thieves;
 import com.windanesz.thieves.block.TileEntityLootBag;
 import com.windanesz.thieves.entity.EntityThief;
+import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.item.ItemLootBag;
 import com.windanesz.thieves.world.ThiefStashManager;
 import net.minecraft.block.state.IBlockState;
@@ -376,9 +377,38 @@ public class ThiefAIEscapeWithLoot extends EntityAIBase {
 	 */
 	private void depositLootAtExistingHideout() {
 		TileEntity te = world.getTileEntity(targetHideout);
+		
+		// If hideout is missing (destroyed), try to recreate it
 		if (!(te instanceof TileEntityLootBag)) {
-			Thieves.LOGGER.warn("Hideout at {} no longer has loot bag!", targetHideout);
-			thief.setDead();
+			// Check if we can place the bag here
+			if (world.isAirBlock(targetHideout) || world.getBlockState(targetHideout).getBlock().isReplaceable(world, targetHideout)) {
+				Thieves.LOGGER.info("Hideout at {} was destroyed, recreating it.", targetHideout);
+				world.setBlockState(targetHideout, ModBlocks.LOOT_BAG.getDefaultState());
+				
+				te = world.getTileEntity(targetHideout);
+				if (te instanceof TileEntityLootBag) {
+					TileEntityLootBag newBag = (TileEntityLootBag) te;
+					newBag.setAsHideout(true);
+					// We don't know previous raid count, assume at least 1 since they were running to it
+					newBag.setSuccessfulRaids(1);
+				}
+			} else {
+				// Cannot recreate at exact spot, create new stash nearby
+				Thieves.LOGGER.warn("Hideout at {} destroyed and obstructed. Creating new stash nearby.", targetHideout);
+				targetHideout = null;
+				createStashAndDespawn();
+				return;
+			}
+		}
+		
+		// Re-fetch TE in case we just recreated it
+		te = world.getTileEntity(targetHideout);
+		
+		if (!(te instanceof TileEntityLootBag)) {
+			// Should act logically if recreation failed despite checks
+			Thieves.LOGGER.error("Failed to restore hideout at {}.", targetHideout);
+			targetHideout = null;
+			createStashAndDespawn();
 			return;
 		}
 		

@@ -290,9 +290,9 @@ public class ThiefStashManager extends WorldSavedData {
 	 */
 	@Nullable
 	private BlockPos findStashLocation(World world, BlockPos nearLocation) {
-		// Try to find a location within 20 blocks of the escape position
+		// Try to find a location within 10 blocks of the escape position
 		for (int attempt = 0; attempt < 100; attempt++) {
-			int distance = RANDOM.nextInt(21); 
+			int distance = 3 + RANDOM.nextInt(4); // 3 to 6 blocks
 			double angle = RANDOM.nextDouble() * Math.PI * 2.0D;
 
 			int offsetX = (int) (Math.cos(angle) * distance);
@@ -300,11 +300,12 @@ public class ThiefStashManager extends WorldSavedData {
 
 			BlockPos candidatePos = nearLocation.add(offsetX, 0, offsetZ);
 
-			// Find ground surface level
-			BlockPos surfacePos = world.getHeight(candidatePos);
-
-			if (isValidStashLocation(world, surfacePos)) {
-				return surfacePos;
+			// Check vertical range around thief's position (floor level)
+			for (int dy = -2; dy <= 2; dy++) {
+				BlockPos checkPos = candidatePos.up(dy);
+				if (isValidStashLocation(world, checkPos)) {
+					return checkPos;
+				}
 			}
 		}
 

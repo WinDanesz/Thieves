@@ -15,6 +15,10 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 
+/**
+ * AI task for tamed thieves to follow their owner.
+ * Allows thieves to teleport to owner if too far away, similar to wolves.
+ */
 public class ThiefAIFollowOwner extends EntityAIBase {
 	private final EntityThief tameable;
 	private final double followSpeed;

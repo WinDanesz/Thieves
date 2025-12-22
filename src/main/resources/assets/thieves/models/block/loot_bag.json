@@ -3,7 +3,8 @@
 	"credit": "Made with Blockbench",
 	"texture_size": [32, 32],
 	"textures": {
-		"2": "thieves:blocks/loot_bag"
+		"2": "thieves:blocks/loot_bag",
+		"particle": "thieves:blocks/loot_bag"
 	},
 	"elements": [
 		{

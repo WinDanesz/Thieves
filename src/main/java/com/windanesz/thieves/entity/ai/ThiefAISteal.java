@@ -8,6 +8,10 @@ import net.minecraft.pathfinding.PathNavigate;
 
 import java.util.List;
 
+/**
+ * AI task for thieves to steal specific dropped items (like idols) from the ground.
+ * Currently configured to search for and pick up specific item types.
+ */
 public class ThiefAISteal extends EntityAIBase {
 	private static final double DETECTION_RANGE = 6.0D;
 	private static final int SEARCH_INTERVAL = 20; // Search every second (20 ticks)

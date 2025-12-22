@@ -46,9 +46,20 @@ import java.util.Set;
 import java.util.UUID;
 
 public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAttackMob {
+
+		// Robbery loot bag position for AI targeting
+		private BlockPos robberyLootBagPos = null;
+
+		public void setRobberyLootBagPos(BlockPos pos) {
+			this.robberyLootBagPos = pos;
+		}
+
+		public BlockPos getRobberyLootBagPos() {
+			return this.robberyLootBagPos;
+		}
 	// Skin variation support
 	protected static final DataParameter<Integer> SKIN_INDEX = EntityDataManager.createKey(EntityThief.class, DataSerializers.VARINT);
-	private static final int SKIN_VARIATION_COUNT = 5; // Change to your number of skins
+	public static final int SKIN_VARIATION_COUNT = 6; // Change to your number of skins
 
 	public static final ResourceLocation LOOT_TABLE = new ResourceLocation(Thieves.MODID, "entities/thief");
 	protected static final DataParameter<Boolean> IS_STEALING = EntityDataManager.createKey(EntityThief.class, DataSerializers.BOOLEAN);
@@ -74,18 +85,19 @@ public class EntityThief extends EntityMob implements IEntityOwnable, IRangedAtt
 	@Override
 	protected void initEntityAI() {
 		this.tasks.addTask(0, new EntityAISwimming(this));
-		this.tasks.addTask(1, new ThiefAIEscapeWithLoot(this));
-		this.tasks.addTask(2, new ThiefAIPickupLootBag(this));
-		this.tasks.addTask(3, new ThiefAIStealToLootBag(this));
-		this.tasks.addTask(4, new ThiefAIEscortToHideout(this));
-		this.tasks.addTask(5, new EntityAIOpenDoor(this, true));
-		
-		this.tasks.addTask(6, new ThiefAIRunBehindTarget(this, 2.0D));
-		this.tasks.addTask(7, new EntityAIAttackRangedBow(this, 1.0D, 20, 15.0F));
-		this.tasks.addTask(7, new EntityAIAttackMelee(this, 1.3D, false));
-		this.tasks.addTask(8, new ThiefAIFollowOwner(this, 1.3D, 5.0F, 3.0F));
-		this.tasks.addTask(9, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
-		this.tasks.addTask(10, new EntityAILookIdle(this));
+		// Prioritize combat during a fight
+		this.tasks.addTask(1, new EntityAIAttackRangedBow(this, 1.0D, 20, 15.0F));
+		this.tasks.addTask(2, new EntityAIAttackMelee(this, 1.3D, false));
+		this.tasks.addTask(3, new ThiefAIEscapeWithLoot(this));
+		this.tasks.addTask(4, new ThiefAIPickupLootBag(this));
+		this.tasks.addTask(5, new ThiefAIStealToLootBag(this));
+		this.tasks.addTask(6, new ThiefAIEscortToHideout(this));
+		this.tasks.addTask(7, new EntityAIOpenDoor(this, true));
+		this.tasks.addTask(8, new ThiefAIRunBehindTarget(this, 2.0D));
+		this.tasks.addTask(9, new EntityAIWanderAvoidWater(this, 1.0D));
+		this.tasks.addTask(10, new ThiefAIFollowOwner(this, 1.3D, 5.0F, 3.0F));
+		this.tasks.addTask(11, new EntityAIWatchClosest(this, EntityPlayer.class, 8.0F));
+		this.tasks.addTask(12, new EntityAILookIdle(this));
 
 		this.targetTasks.addTask(1, new ThiefAIOwnerHurtByTarget(this));
 		this.targetTasks.addTask(2, new ThiefAIOwnerHurtTarget(this));

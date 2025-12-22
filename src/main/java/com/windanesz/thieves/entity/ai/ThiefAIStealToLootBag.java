@@ -5,7 +5,10 @@ import com.windanesz.thieves.entity.EntityMasterThief;
 import com.windanesz.thieves.entity.EntityThief;
 import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.util.PlayerBaseDetector;
+import com.windanesz.thieves.world.ThiefStashManager;
 import net.minecraft.entity.ai.EntityAIBase;
+import com.windanesz.thieves.item.ItemLootBag;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.init.Blocks;
 import net.minecraft.inventory.EntityEquipmentSlot;
 import net.minecraft.inventory.IInventory;
@@ -61,8 +64,13 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 
 	@Override
 	public boolean shouldExecute() {
-		// Don't execute if thief already has a loot bag in inventory
+		// Don't execute if thief already has a loot bag in inventory (should be escaping)
 		if (thiefHasLootBag()) {
+			return false;
+		}
+
+		// Don't execute if there is a thief with a loot bag nearby (should be escorting)
+		if (isCarrierNearby()) {
 			return false;
 		}
 		
@@ -72,24 +80,59 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			return false;
 		}
 
+		boolean hasStolenItem = !thief.getHeldItemOffhand().isEmpty();
+
 		// Find loot bag first
 		if (lootBagPos == null || !isValidLootBag(lootBagPos)) {
-			lootBagPos = findNearestLootBag();
+			lootBagPos = null; // Reset invalid pos
+
+			// Try robbery loot bag pos first
+			if (thief.isRobberyThief() && thief.getRobberyLootBagPos() != null) {
+				BlockPos robPos = thief.getRobberyLootBagPos();
+				if (isValidLootBag(robPos)) {
+					lootBagPos = robPos;
+				}
+			}
+			
+			// If still null, search for nearest
 			if (lootBagPos == null) {
-				searchCooldown = SEARCH_COOLDOWN_TIME * 4; // Longer cooldown if no bag found
+				lootBagPos = findNearestLootBag();
+			}
+
+			// If still null and we have an item, try to find a hideout
+			if (lootBagPos == null && hasStolenItem) {
+				lootBagPos = ThiefStashManager.get(world).getNearestHideout(world, thief.getPosition(), 500);
+			}
+			
+			if (lootBagPos == null) {
+				searchCooldown = (SEARCH_COOLDOWN_TIME * 4) + random.nextInt(60); // Longer cooldown if no bag found
+				
+				// If we can't find a loot bag, assume the raid is botched and try to escape/return to hideout
+				// by forcing the thief to become a "robbery thief" which triggers the Escort task
+				if (!thief.isRobberyThief()) {
+					thief.setRobberyThief(true);
+				}
+				
 				return false;
 			}
 		}
 
 		// Check if loot bag has reached thief limit
 		if (hasReachedThiefLimit(lootBagPos)) {
-			return false; // Bag has reached limit, can't steal more
+			lootBagPos = null; // Reset to find a new bag next time
+			searchCooldown = SEARCH_COOLDOWN_TIME + random.nextInt(20);
+			return false;
+		}
+
+		// If we already have a stolen item, skip chest search and go deposit
+		if (hasStolenItem) {
+			return true;
 		}
 
 		// Find a chest with items
 		targetChestPos = findNearestAccessibleChest();
 		if (targetChestPos == null) {
-			searchCooldown = SEARCH_COOLDOWN_TIME;
+			searchCooldown = SEARCH_COOLDOWN_TIME + random.nextInt(20);
 			return false;
 		}
 
@@ -98,16 +141,66 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 
 	@Override
 	public boolean shouldContinueExecuting() {
-		// Continue until we complete the deposit or something goes wrong
-		return currentState != State.IDLE && 
-			   lootBagPos != null && 
-			   isValidLootBag(lootBagPos) &&
-			   !hasReachedThiefLimit(lootBagPos);
+		// Stop if a carrier appears nearby (every 20 ticks check)
+		if (thief.ticksExisted % 20 == 0 && isCarrierNearby()) {
+			return false;
+		}
+
+		if (currentState == State.IDLE) {
+			return false;
+		}
+
+		// Check if current loot bag is valid
+		if (lootBagPos != null && isValidLootBag(lootBagPos)) {
+			if (hasReachedThiefLimit(lootBagPos)) {
+				return false;
+			}
+			return true;
+		}
+
+		// Bag is missing or invalid. If we have items, try to switch to a hideout
+		if (!carriedItems.isEmpty() || !thief.getHeldItemOffhand().isEmpty()) {
+			BlockPos hideout = ThiefStashManager.get(world).getNearestHideout(world, thief.getPosition(), 500);
+			if (hideout != null) {
+				lootBagPos = hideout;
+				// Ensure we are in the correct state to go to the bag
+				if (currentState != State.DEPOSITING_ITEMS) {
+					currentState = State.NAVIGATING_TO_BAG;
+				}
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private boolean isCarrierNearby() {
+		double radius = 16.0D;
+		List<EntityThief> nearbyThieves = world.getEntitiesWithinAABB(EntityThief.class, 
+			new AxisAlignedBB(thief.getPosition()).grow(radius));
+
+		for (EntityThief otherThief : nearbyThieves) {
+			if (otherThief != thief && !otherThief.isDead) {
+				ItemStack offhand = otherThief.getItemStackFromSlot(EntityEquipmentSlot.OFFHAND);
+				if (!offhand.isEmpty() && offhand.getItem() instanceof ItemLootBag) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	@Override
 	public void startExecuting() {
-		currentState = State.NAVIGATING_TO_CHEST;
+		// Check if we started because we already have an item
+		if (!thief.getHeldItemOffhand().isEmpty() && !thiefHasLootBag()) {
+			if (carriedItems.isEmpty()) {
+				carriedItems.add(thief.getHeldItemOffhand());
+			}
+			currentState = State.NAVIGATING_TO_BAG;
+		} else {
+			currentState = State.NAVIGATING_TO_CHEST;
+		}
 		extractionTimer = 0;
 	}
 
@@ -115,6 +208,16 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 	public void resetTask() {
 		closeChest();
 		clearHeldItem();
+		
+		// Drop carried items if any to prevent loss
+		if (!carriedItems.isEmpty()) {
+			for (ItemStack stack : carriedItems) {
+				if (!stack.isEmpty()) {
+					thief.entityDropItem(stack, 0.0F);
+				}
+			}
+		}
+		
 		currentState = State.IDLE;
 		targetChestPos = null;
 		carriedItems.clear();
@@ -252,20 +355,22 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 
 	private BlockPos findNearestLootBag() {
 		BlockPos thiefPos = thief.getPosition();
+		BlockPos nearest = null;
+		double minDistanceSq = BAG_SEARCH_RADIUS * BAG_SEARCH_RADIUS;
 
-		for (int x = -BAG_SEARCH_RADIUS; x <= BAG_SEARCH_RADIUS; x++) {
-			for (int z = -BAG_SEARCH_RADIUS; z <= BAG_SEARCH_RADIUS; z++) {
-				for (int y = -8; y <= 8; y++) {
-					BlockPos checkPos = thiefPos.add(x, y, z);
-					
-					if (world.getBlockState(checkPos).getBlock() == ModBlocks.LOOT_BAG) {
-						return checkPos;
+		for (TileEntity te : world.loadedTileEntityList) {
+			if (te instanceof TileEntityLootBag) {
+				if (Math.abs(te.getPos().getY() - thiefPos.getY()) <= 8) {
+					double distSq = te.getDistanceSq(thiefPos.getX(), thiefPos.getY(), thiefPos.getZ());
+					if (distSq <= minDistanceSq) {
+						minDistanceSq = distSq;
+						nearest = te.getPos();
 					}
 				}
 			}
 		}
 
-		return null;
+		return nearest;
 	}
 
 	private BlockPos findNearestAccessibleChest() {
@@ -287,19 +392,18 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 	private List<BlockPos> scanForChests() {
 		List<BlockPos> chests = new ArrayList<>();
 		BlockPos thiefPos = thief.getPosition();
+		double searchRadiusSq = CHEST_SEARCH_RADIUS * CHEST_SEARCH_RADIUS;
 
-		for (int x = -CHEST_SEARCH_RADIUS; x <= CHEST_SEARCH_RADIUS; x++) {
-			for (int z = -CHEST_SEARCH_RADIUS; z <= CHEST_SEARCH_RADIUS; z++) {
-				for (int y = -8; y <= 8; y++) {
-					BlockPos checkPos = thiefPos.add(x, y, z);
-					
-					if (world.getBlockState(checkPos).getBlock() == Blocks.CHEST ||
-						world.getBlockState(checkPos).getBlock() == Blocks.TRAPPED_CHEST) {
-						
-						// Check if chest is accessible (has items)
-						TileEntity te = world.getTileEntity(checkPos);
-						if (te instanceof IInventory && hasAccessibleItems((IInventory) te)) {
-							chests.add(checkPos);
+		for (TileEntity te : world.loadedTileEntityList) {
+			if (Math.abs(te.getPos().getY() - thiefPos.getY()) <= 8) {
+				double distSq = te.getDistanceSq(thiefPos.getX(), thiefPos.getY(), thiefPos.getZ());
+				if (distSq <= searchRadiusSq) {
+					if (te instanceof TileEntityChest) {
+						net.minecraft.block.Block blockType = te.getBlockType();
+						if (blockType == Blocks.CHEST || blockType == Blocks.TRAPPED_CHEST) {
+							if (hasAccessibleItems((IInventory) te)) {
+								chests.add(te.getPos());
+							}
 						}
 					}
 				}
@@ -405,7 +509,12 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 	private boolean hasReachedThiefLimit(BlockPos pos) {
 		TileEntity te = world.getTileEntity(pos);
 		if (te instanceof TileEntityLootBag) {
-			return ((TileEntityLootBag) te).hasReachedThiefLimit();
+			TileEntityLootBag bag = (TileEntityLootBag) te;
+			// Hideouts don't have a thief limit for depositing
+			if (bag.isHideout()) {
+				return false;
+			}
+			return bag.hasReachedThiefLimit();
 		}
 		return false;
 	}

@@ -31,6 +31,10 @@ public class Settings {
 	}
 
 	public static class RobberySettings {
+		@Config.Comment("Distance from loot bag where thieves spawn during a robbery (blocks)")
+		@Config.RangeInt(min = 1, max = 32)
+		public int thiefSpawnDistance = 4;
+		
 		@Config.Comment("Base progress buildup rate per minute")
 		@Config.RangeDouble(min = 0.0, max = 10.0)
 		public float baseProgressRate = 0.05F;
@@ -64,6 +68,18 @@ public class Settings {
 		@Config.Comment("Robberies required before master thief can spawn")
 		@Config.RangeInt(min = 0, max = 100)
 		public int masterThiefMinRobberies = 5;
+
+		@Config.Comment("Time in seconds for thieves to reach a chest before robbery fails")
+		@Config.RangeInt(min = 10, max = 600)
+		public int robberyTimeout = 60;
+
+		@Config.Comment("Minimum distance from chest to place loot bag")
+		@Config.RangeInt(min = 1, max = 16)
+		public int lootBagSpawnMinDistance = 5;
+
+		@Config.Comment("Maximum distance from chest to place loot bag")
+		@Config.RangeInt(min = 1, max = 16)
+		public int lootBagSpawnMaxDistance = 10;
 	}
 
 	public static class BaseDetectionSettings {
