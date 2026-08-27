@@ -19,6 +19,7 @@ import javax.annotation.Nonnull;
 public class ModItems {
 
 	public static final Item LOOT_BAG_ITEM = placeholder();
+	public static final Item STASH_MAP = placeholder();
 
 	private ModItems() {
 	}
@@ -38,7 +39,7 @@ public class ModItems {
 		registerItemBlock(registry, ModBlocks.LOOT_BAG);
 		
 		// Register items
-		//registry.register(new ItemLootBag());
+		registry.register(new com.windanesz.thieves.item.ItemStashMap().setCreativeTab(CreativeTabs.MISC));
 	}
 
 	// Helper for registering ItemBlocks

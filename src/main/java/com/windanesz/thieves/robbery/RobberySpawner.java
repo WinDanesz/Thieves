@@ -10,14 +10,11 @@ import com.windanesz.thieves.entity.ai.ThiefAISeekChestAndSignal;
 import com.windanesz.thieves.init.ModBlocks;
 import com.windanesz.thieves.util.PlayerBaseDetector;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.init.Blocks;
-import net.minecraft.tileentity.TileEntity;
-import net.minecraft.tileentity.TileEntityChest;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.text.TextComponentString;
+import net.minecraft.util.text.TextFormatting;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
-import net.minecraftforge.common.ForgeChunkManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,332 +24,248 @@ import java.util.Random;
  * Handles spawning of robbery events including thieves and loot bags.
  */
 public class RobberySpawner {
-	// Store the cluster spawn position for the current robbery
-	private static BlockPos clusterSpawnPos = null;
 
-	private static final Random RANDOM = new Random();
+    // Store the cluster spawn position for the current robbery
+    private static BlockPos clusterSpawnPos = null;
 
-	/**
-	 * Triggers a full robbery event at the player's base.
-	 * Flow:
-	 * 1. Spawns thieves first at a configured distance.
-	 * 2. Thieves attempt to find a path to a chest within a timeout (default 1 min).
-	 * 3. If a thief reaches a chest, a loot bag is placed nearby.
-	 * 4. All thieves then target the loot bag to steal items.
-	 * 5. If no thief reaches a chest within the timeout, the robbery fails and thieves despawn.
-	 */
-	public static void triggerRobbery(EntityPlayer player, PlayerCapability cap) {
-		World world = player.world;
+    private static final Random RANDOM = new Random();
 
-		if (world.isRemote || !(world instanceof WorldServer)) {
-			return;
-		}
+    /**
+     * Triggers a full robbery event at the player's base.
+     * Flow:
+     * 1. Spawns thieves first at a configured distance.
+     * 2. Thieves attempt to find a path to a chest within a timeout (default 1 min).
+     * 3. If a thief reaches a chest, a loot bag is placed nearby.
+     * 4. All thieves then target the loot bag to steal items.
+     * 5. If no thief reaches a chest within the timeout, the robbery fails and thieves despawn.
+     */
+    public static void triggerRobbery(EntityPlayer player, PlayerCapability cap) {
+        World world = player.world;
 
-		BlockPos baseLocation = cap.baseLocation;
-		if (baseLocation == null) {
-			Thieves.LOGGER.warn("Attempted to trigger robbery but player {} has no detected base", player.getName());
-			return;
-		}
+        if (world.isRemote || !(world instanceof WorldServer)) {
+            return;
+        }
 
-		Thieves.LOGGER.info("Triggering robbery for player {} at base location {}", player.getName(), baseLocation);
+        BlockPos baseLocation = cap.baseLocation;
+        if (baseLocation == null) {
+            Thieves.LOGGER.warn("Attempted to trigger robbery but player {} has no detected base", player.getName());
+            return;
+        }
 
-		// Force-load chunks around base
-		List<ChunkPos> loadedChunks = forceLoadChunksAroundBase(world, baseLocation, 3);
+        Thieves.LOGGER.info("Triggering robbery for player {} at base location {}", player.getName(), baseLocation);
 
-		// Find chests at base
-		List<BlockPos> chestLocations = PlayerBaseDetector.scanForChests(world, baseLocation, 3);
+        // Force-load chunks around base via the centralized per-player manager
+        RobberyChunkManager.startRobbery(player.getUniqueID(), world, baseLocation);
 
-		if (chestLocations.isEmpty()) {
-			Thieves.LOGGER.warn("No chests found at base location for player {}, aborting robbery", player.getName());
-			unloadChunks(world, loadedChunks);
-			return;
-		}
+        // Find chests at base
+        List<BlockPos> chestLocations = PlayerBaseDetector.scanForChests(world, baseLocation, 3);
 
-		// Calculate number of thieves to spawn
-		int thiefCount = calculateThiefCount(cap.completedRobberies);
-		boolean shouldSpawnMaster = shouldSpawnMasterThief(cap.completedRobberies);
+        if (chestLocations.isEmpty()) {
+            Thieves.LOGGER.warn("No chests found at base location for player {}, aborting robbery", player.getName());
+            RobberyChunkManager.endRobbery(player.getUniqueID());
+            return;
+        }
 
-		Thieves.LOGGER.info("Spawning {} thieves (master: {})", thiefCount, shouldSpawnMaster);
+        // Calculate number of thieves to spawn
+        int thiefCount = calculateThiefCount(cap.completedRobberies);
+        boolean shouldSpawnMaster = shouldSpawnMasterThief(cap.completedRobberies);
 
-		// Reset cluster spawn position for this robbery
-		clusterSpawnPos = null;
-		int spawnedCount = 0;
-		List<EntityThief> spawnedThieves = new ArrayList<>();
-		for (int i = 0; i < thiefCount; i++) {
-			boolean isMaster = shouldSpawnMaster && i == 0; // First thief is master if applicable
-			EntityThief thief = spawnThief(world, baseLocation, chestLocations, isMaster, cap.completedRobberies);
-			if (thief != null) {
-				spawnedCount++;
-				spawnedThieves.add(thief);
-			}
-		}
+        Thieves.LOGGER.info("Spawning {} thieves (master: {})", thiefCount, shouldSpawnMaster);
 
-		Thieves.LOGGER.info("Successfully spawned {} thieves for robbery", spawnedCount);
+        // Reset cluster spawn position for this robbery
+        clusterSpawnPos = null;
+        int spawnedCount = 0;
+        List<EntityThief> spawnedThieves = new ArrayList<>();
+        for (int i = 0; i < thiefCount; i++) {
+            boolean isMaster = shouldSpawnMaster && i == 0; // First thief is master if applicable
+            EntityThief thief = spawnThief(world, baseLocation, chestLocations, isMaster, cap.completedRobberies);
+            if (thief != null) {
+                thief.setRobberyTargetUUID(player.getUniqueID());
+                spawnedCount++;
+                spawnedThieves.add(thief);
+            }
+        }
 
-		// Notify the player
-		if (spawnedCount > 0) {
-			net.minecraft.util.text.TextComponentString message = new net.minecraft.util.text.TextComponentString(
-					net.minecraft.util.text.TextFormatting.RED + "Your base is being robbed by " +
-					(spawnedCount > 1 ? spawnedCount + " thieves" : "a thief") + "!");
-			player.sendMessage(message);
-		}
+        Thieves.LOGGER.info("Successfully spawned {} thieves for robbery", spawnedCount);
 
-		// --- AI chest pathfinding and loot bag placement logic ---
-		// Shared state for callback
-		class SharedLootBagState {
-			boolean placed = false;
-			BlockPos lootBagPos = null;
-		}
-		SharedLootBagState lootBagState = new SharedLootBagState();
+        if (spawnedCount == 0) {
+            // No thieves could be spawned — abort cleanly
+            RobberyChunkManager.endRobbery(player.getUniqueID());
+            return;
+        }
 
-		// Callback for when a thief reaches a chest
-		com.windanesz.thieves.entity.ai.ThiefAISeekChestAndSignal.ChestReachedCallback callback = (thief, chestPos) -> {
-			if (!lootBagState.placed) {
-				// Place loot bag within configured distance of the chest
-				int min = Settings.robbery.lootBagSpawnMinDistance;
-				int max = Settings.robbery.lootBagSpawnMaxDistance;
-				int dist = min + RANDOM.nextInt(max - min + 1);
-				
-				double angle = RANDOM.nextDouble() * Math.PI * 2;
-				int offsetX = (int) (Math.cos(angle) * dist);
-				int offsetZ = (int) (Math.sin(angle) * dist);
-				BlockPos candidate = chestPos.add(offsetX, 0, offsetZ);
-				BlockPos lootBagPos = world.getHeight(candidate);
-				
-				// Ensure valid placement (simplified check)
-				if (!world.isAirBlock(lootBagPos)) {
-					lootBagPos = Utils.findNearbyAirSpace(world, lootBagPos, 3);
-				}
+        // Stamp lastRobberyTime and reset progress NOW — before any world close can happen.
+        // This prevents a re-trigger on reload if the world closes before the loot bag is placed.
+        cap.startRobbery(world);
 
-				world.setBlockState(lootBagPos, ModBlocks.LOOT_BAG.getDefaultState());
-				lootBagState.placed = true;
-				lootBagState.lootBagPos = lootBagPos;
-				Thieves.LOGGER.info("Placed loot bag at {} after thief reached chest {}", lootBagPos, chestPos);
-				
-				// Notify all thieves of loot bag location (set a field and update their AI)
-				for (EntityThief t : spawnedThieves) {
-					t.setRobberyLootBagPos(lootBagPos);
-				}
-				// Mark robbery as completed
-				cap.completeRobbery(world);
-			}
-		};
+        // Notify the player
+        String thiefWord = spawnedCount > 1 ? spawnedCount + " thieves" : "a thief";
+        player.sendMessage(new TextComponentString(
+                TextFormatting.RED + "Your base is being robbed by " + thiefWord + "!"));
 
-		// Assign the AI task to each thief
-		for (EntityThief thief : spawnedThieves) {
-			thief.tasks.addTask(0, new com.windanesz.thieves.entity.ai.ThiefAISeekChestAndSignal(thief, chestLocations, callback));
-		}
+        // Create the ActiveRobbery object to track this robbery
+        long timeoutTick = world.getTotalWorldTime() + 20L * Settings.robbery.robberyTimeout;
+        ActiveRobbery robbery = new ActiveRobbery(player.getUniqueID(), player, world, spawnedThieves, timeoutTick);
 
-		// Timeout check: schedule a check
-		long timeoutTick = world.getTotalWorldTime() + 20 * Settings.robbery.robberyTimeout;
-		net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new Object() {
-			@net.minecraftforge.fml.common.eventhandler.SubscribeEvent
-			public void onWorldTick(net.minecraftforge.fml.common.gameevent.TickEvent.WorldTickEvent event) {
-				if (event.world != world) return;
-				if (world.getTotalWorldTime() >= timeoutTick) {
-					if (!lootBagState.placed) {
-						// Despawn all thieves and notify player
-						for (EntityThief thief : spawnedThieves) {
-							thief.setDead();
-						}
-						player.sendMessage(new net.minecraft.util.text.TextComponentString(
-							net.minecraft.util.text.TextFormatting.GRAY + "Robbery failed: Thieves could not reach a chest."));
-						Thieves.LOGGER.info("Robbery failed: Thieves could not reach a chest in time.");
-					}
-					net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(this);
-				}
-				// If loot bag placed, unregister
-				if (lootBagState.placed) {
-					net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(this);
-				}
-			}
-		});
+        // Callback for when a thief reaches a chest — sets state on the robbery object
+        ThiefAISeekChestAndSignal.ChestReachedCallback callback = (thief, chestPos) -> {
+            if (robbery.lootBagPlaced) return; // Another thief already placed it
 
-		// Unload chunks after a delay (let thieves start their work)
-		// Note: In production, you'd want a more sophisticated chunk management system
-		// For now, we'll rely on natural chunk loading/unloading
-	}
+            // Place loot bag within configured distance of the chest
+            int min = Settings.robbery.lootBagSpawnMinDistance;
+            int max = Settings.robbery.lootBagSpawnMaxDistance;
+            int dist = min + RANDOM.nextInt(max - min + 1);
 
-	/**
-	 * Checks if it's currently night time in the world.
-	 */
-	public static boolean isNightTime(World world) {
-		long dayTime = world.getWorldTime() % 24000;
-		return dayTime >= 12542 && dayTime <= 23458;
-	}
+            double angle = RANDOM.nextDouble() * Math.PI * 2;
+            int offsetX = (int) (Math.cos(angle) * dist);
+            int offsetZ = (int) (Math.sin(angle) * dist);
+            BlockPos candidate = chestPos.add(offsetX, 0, offsetZ);
+            BlockPos lootBagPos = world.getHeight(candidate);
 
-	/**
-	 * Spawns a thief (regular or master) near the loot bag.
-	 */
-	private static EntityThief spawnThief(World world, BlockPos baseLocation, List<BlockPos> chestLocations, boolean isMaster, int completedRobberies) {
-		// Use a configurable spawn distance
-		int distance = Settings.robbery.thiefSpawnDistance;
-		if (clusterSpawnPos == null) {
-			// Find a valid cluster spawn position only once per robbery
-			clusterSpawnPos = findThiefSpawnPos(world, baseLocation, distance, distance);
-		}
-		BlockPos spawnPos = clusterSpawnPos;
-		if (spawnPos == null) {
-			Thieves.LOGGER.warn("Could not find valid thief spawn position near {}", baseLocation);
-			return null;
-		}
+            // Ensure valid placement
+            if (!world.isAirBlock(lootBagPos)) {
+                BlockPos safePos = Utils.findNearbyAirSpace(world, lootBagPos, 3);
+                if (safePos != null) {
+                    lootBagPos = safePos;
+                }
+            }
 
-		// Create thief entity
-		EntityThief thief = new EntityThief(world);
-		// Randomize skin immediately for robbery-spawned thieves
-		thief.setSkinIndex(RANDOM.nextInt(EntityThief.SKIN_VARIATION_COUNT));
+            world.setBlockState(lootBagPos, ModBlocks.LOOT_BAG.getDefaultState());
 
-		// Slightly offset each thief to avoid exact overlap (optional, can be removed for single block)
-		double offsetX = 0.5 + (RANDOM.nextDouble() - 0.5) * 0.2;
-		double offsetZ = 0.5 + (RANDOM.nextDouble() - 0.5) * 0.2;
-		thief.setPosition(spawnPos.getX() + offsetX, spawnPos.getY(), spawnPos.getZ() + offsetZ);
+            // Update the shared robbery state (Fix 2 — no more inner class SharedLootBagState)
+            robbery.lootBagPlaced = true;
+            robbery.lootBagPos = lootBagPos;
 
-		// Mark as robbery thief for tracking
-		thief.setRobberyThief(true);
-		//thief.onInitialSpawn(world.getDifficultyForLocation(spawnPos, thief.data));
+            Thieves.LOGGER.info("Placed loot bag at {} after thief reached chest {}", lootBagPos, chestPos);
 
-		// Equip weapon based on completed robberies count
-		thief.equipWeaponBasedOnRaidCount(completedRobberies);
+            // Notify all thieves of the loot bag location
+            for (EntityThief t : spawnedThieves) {
+                t.setRobberyLootBagPos(lootBagPos);
+            }
 
-		// Store loot bag and chest positions in thief's NBT for AI tasks
-		// (This would require adding fields to EntityThief or using a capability)
+            // Mark robbery as completed in the player's capability
+            cap.completeRobbery(world);
+        };
 
-		world.spawnEntity(thief);
+        // Assign the AI task to each thief
+        for (EntityThief thief : spawnedThieves) {
+            thief.tasks.addTask(0, new ThiefAISeekChestAndSignal(thief, chestLocations, callback));
+        }
 
-		return thief;
-	}
+        // Register with the central manager — no more anonymous event bus listeners (Fix 2)
+        RobberyManager.register(robbery);
+    }
 
-	/**
-	 * Calculates how many thieves should spawn based on completed robbery count.
-	 */
-	public static int calculateThiefCount(int completedRobberies) {
-		int count = 1 + (completedRobberies / 3);
-		return Math.min(count, 5); // Cap at 5 thieves
-	}
+    /**
+     * Checks if it's currently night time in the world.
+     */
+    public static boolean isNightTime(World world) {
+        long dayTime = world.getWorldTime() % 24000;
+        return dayTime >= 12542 && dayTime <= 23458;
+    }
 
-	/**
-	 * Determines if a master thief should spawn.
-	 */
-	public static boolean shouldSpawnMasterThief(int completedRobberies) {
-		if (!Settings.robbery.enableMasterThief) {
-			return false;
-		}
+    /**
+     * Spawns a thief (regular or master) near the base.
+     */
+    private static EntityThief spawnThief(World world, BlockPos baseLocation, List<BlockPos> chestLocations, boolean isMaster, int completedRobberies) {
+        // Use a configurable spawn distance
+        int distance = Settings.robbery.thiefSpawnDistance;
+        if (clusterSpawnPos == null) {
+            // Find a valid cluster spawn position only once per robbery
+            clusterSpawnPos = findThiefSpawnPos(world, baseLocation, distance, distance);
+        }
+        BlockPos spawnPos = clusterSpawnPos;
+        if (spawnPos == null) {
+            Thieves.LOGGER.warn("Could not find valid thief spawn position near {}", baseLocation);
+            return null;
+        }
 
-		if (completedRobberies < Settings.robbery.masterThiefMinRobberies) {
-			return false;
-		}
+        // Create thief entity (master or regular)
+        EntityThief thief = isMaster ? new EntityMasterThief(world) : new EntityThief(world);
 
-		return RANDOM.nextFloat() < Settings.robbery.masterThiefChance;
-	}
+        // Randomize skin immediately for robbery-spawned thieves
+        thief.setSkinIndex(RANDOM.nextInt(EntityThief.SKIN_VARIATION_COUNT));
 
-	/**
-	 * Finds a suitable position to spawn the loot bag near chests.
-	 */
-	private static BlockPos findLootBagSpawnPos(World world, List<BlockPos> chestLocations) {
-		if (chestLocations.isEmpty()) {
-			return null;
-		}
+        // Slightly offset each thief to avoid exact overlap
+        double offsetX = 0.5 + (RANDOM.nextDouble() - 0.5) * 0.2;
+        double offsetZ = 0.5 + (RANDOM.nextDouble() - 0.5) * 0.2;
+        thief.setPosition(spawnPos.getX() + offsetX, spawnPos.getY(), spawnPos.getZ() + offsetZ);
 
-		// Pick a random chest as reference
-		BlockPos referenceChest = chestLocations.get(RANDOM.nextInt(chestLocations.size()));
+        // Mark as robbery thief for tracking
+        thief.setRobberyThief(true);
 
-		// Try to find a valid position 2-6 blocks from the chest
-		for (int attempt = 0; attempt < 50; attempt++) {
-			int offsetX = 2 + RANDOM.nextInt(5);
-			int offsetZ = 2 + RANDOM.nextInt(5);
+        // Equip weapon based on completed robberies count
+        thief.equipWeaponBasedOnRaidCount(completedRobberies);
 
-			if (RANDOM.nextBoolean()) offsetX = -offsetX;
-			if (RANDOM.nextBoolean()) offsetZ = -offsetZ;
+        world.spawnEntity(thief);
 
-			BlockPos candidatePos = referenceChest.add(offsetX, 0, offsetZ);
-			
-			// Find ground level
-			candidatePos = world.getHeight(candidatePos);
+        return thief;
+    }
 
-			// Check if position is valid (air block with solid ground)
-			if (world.isAirBlock(candidatePos) && 
-				world.getBlockState(candidatePos.down()).isSideSolid(world, candidatePos.down(), net.minecraft.util.EnumFacing.UP)) {
-				return candidatePos;
-			}
-		}
+    /**
+     * Calculates how many thieves should spawn based on completed robbery count.
+     */
+    public static int calculateThiefCount(int completedRobberies) {
+        int count = 1 + (completedRobberies / 3);
+        return Math.min(count, 5); // Cap at 5 thieves
+    }
 
-		// Fallback: place right next to chest
-		return Utils.findNearbyAirSpace(world, referenceChest, 5);
-	}
+    /**
+     * Determines if a master thief should spawn.
+     */
+    public static boolean shouldSpawnMasterThief(int completedRobberies) {
+        if (!Settings.robbery.enableMasterThief) {
+            return false;
+        }
 
-	/**
-	 * Finds a position to spawn a thief within a distance range.
-	 */
-	private static BlockPos findThiefSpawnPos(World world, BlockPos center, int minDistance, int maxDistance) {
-		for (int attempt = 0; attempt < 50; attempt++) {
-			int distance = minDistance + RANDOM.nextInt(maxDistance - minDistance + 1);
-			double angle = RANDOM.nextDouble() * Math.PI * 2;
+        if (completedRobberies < Settings.robbery.masterThiefMinRobberies) {
+            return false;
+        }
 
-			int offsetX = (int) (Math.cos(angle) * distance);
-			int offsetZ = (int) (Math.sin(angle) * distance);
+        return RANDOM.nextFloat() < Settings.robbery.masterThiefChance;
+    }
 
-			BlockPos candidatePos = center.add(offsetX, 0, offsetZ);
-			candidatePos = world.getHeight(candidatePos);
+    /**
+     * Finds a position to spawn a thief within a distance range.
+     */
+    private static BlockPos findThiefSpawnPos(World world, BlockPos center, int minDistance, int maxDistance) {
+        for (int attempt = 0; attempt < 50; attempt++) {
+            int distance = minDistance + RANDOM.nextInt(maxDistance - minDistance + 1);
+            double angle = RANDOM.nextDouble() * Math.PI * 2;
 
-			if (isValidSpawnLocation(world, candidatePos)) {
-				return candidatePos;
-			}
-		}
+            int offsetX = (int) (Math.cos(angle) * distance);
+            int offsetZ = (int) (Math.sin(angle) * distance);
 
-		return null;
-	}
+            BlockPos candidatePos = center.add(offsetX, 0, offsetZ);
+            candidatePos = world.getHeight(candidatePos);
 
-	/**
-	 * Checks if a position is valid for entity spawning.
-	 */
-	private static boolean isValidSpawnLocation(World world, BlockPos pos) {
-		// Check 2 blocks of air space above solid ground
-		if (!world.isAirBlock(pos) || !world.isAirBlock(pos.up())) {
-			return false;
-		}
+            if (isValidSpawnLocation(world, candidatePos)) {
+                return candidatePos;
+            }
+        }
 
-		BlockPos groundPos = pos.down();
-		if (!world.getBlockState(groundPos).isSideSolid(world, groundPos, net.minecraft.util.EnumFacing.UP)) {
-			return false;
-		}
+        return null;
+    }
 
-		// Don't spawn in water/lava
-		if (world.getBlockState(pos).getMaterial().isLiquid()) {
-			return false;
-		}
+    /**
+     * Checks if a position is valid for entity spawning.
+     */
+    private static boolean isValidSpawnLocation(World world, BlockPos pos) {
+        // Check 2 blocks of air space above solid ground
+        if (!world.isAirBlock(pos) || !world.isAirBlock(pos.up())) {
+            return false;
+        }
 
-		return true;
-	}
+        BlockPos groundPos = pos.down();
+        if (!world.getBlockState(groundPos).isSideSolid(world, groundPos, net.minecraft.util.EnumFacing.UP)) {
+            return false;
+        }
 
-	/**
-	 * Force-loads chunks around the base location.
-	 */
-	private static List<ChunkPos> forceLoadChunksAroundBase(World world, BlockPos baseLocation, int chunkRadius) {
-		List<ChunkPos> loadedChunks = new ArrayList<>();
-		ChunkPos centerChunk = new ChunkPos(baseLocation);
+        // Don't spawn in water/lava
+        if (world.getBlockState(pos).getMaterial().isLiquid()) {
+            return false;
+        }
 
-		for (int x = centerChunk.x - chunkRadius; x <= centerChunk.x + chunkRadius; x++) {
-			for (int z = centerChunk.z - chunkRadius; z <= centerChunk.z + chunkRadius; z++) {
-				ChunkPos chunkPos = new ChunkPos(x, z);
-				
-				// Ensure chunk is loaded
-				if (!world.isChunkGeneratedAt(x, z)) {
-					world.getChunk(x, z);
-				}
-
-				loadedChunks.add(chunkPos);
-			}
-		}
-
-		return loadedChunks;
-	}
-
-	/**
-	 * Unloads chunks that were force-loaded (optional cleanup).
-	 */
-	private static void unloadChunks(World world, List<ChunkPos> chunks) {
-		// In Minecraft 1.12.2, chunk unloading is managed by the game
-		// This is a placeholder for potential future implementation
-		// that might use ForgeChunkManager for persistent chunk loading
-	}
+        return true;
+    }
 }

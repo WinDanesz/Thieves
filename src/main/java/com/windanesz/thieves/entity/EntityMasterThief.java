@@ -105,4 +105,68 @@ public class EntityMasterThief extends EntityThief {
 	protected float getSoundPitch() {
 		return 0.9F; // Slightly deeper voice
 	}
+
+	// --- BREACHING LOGIC --- //
+
+	private int blocksBroken = 0;
+	private int breachCooldown = 0;
+	private static final int MAX_BLOCKS_BROKEN = 6;
+
+	public boolean canBreach() {
+		return blocksBroken < MAX_BLOCKS_BROKEN;
+	}
+
+	@Override
+	public void onLivingUpdate() {
+		super.onLivingUpdate();
+
+		if (!this.world.isRemote && this.isEntityAlive()) {
+			if (breachCooldown > 0) {
+				breachCooldown--;
+			}
+
+			// If we are stuck (collided horizontally) and we still have blocks to break
+			if (this.isCollidedHorizontally && this.canBreach() && breachCooldown == 0) {
+				// Determine block in front of us
+				net.minecraft.util.math.Vec3d look = this.getLookVec();
+				// Offset slightly forward to get the block we're bumping into
+				net.minecraft.util.math.BlockPos headPos = new net.minecraft.util.math.BlockPos(this.posX + look.x, this.posY + this.getEyeHeight(), this.posZ + look.z);
+				net.minecraft.util.math.BlockPos footPos = new net.minecraft.util.math.BlockPos(this.posX + look.x, this.posY + 0.1, this.posZ + look.z);
+				
+				boolean brokeSomething = false;
+				
+				// Try breaking head-level and foot-level blocks
+				if (tryBreachBlock(headPos)) brokeSomething = true;
+				if (tryBreachBlock(footPos)) brokeSomething = true;
+				
+				if (brokeSomething) {
+					this.breachCooldown = 30; // 1.5 seconds between breaks
+					this.blocksBroken++;
+				}
+			}
+		}
+	}
+
+	private boolean tryBreachBlock(net.minecraft.util.math.BlockPos pos) {
+		net.minecraft.block.state.IBlockState state = this.world.getBlockState(pos);
+		net.minecraft.block.Block block = state.getBlock();
+		
+		if (this.world.isAirBlock(pos)) return false;
+		if (state.getBlockHardness(this.world, pos) < 0.0F) return false; // Unbreakable (Bedrock)
+		if (state.getBlockHardness(this.world, pos) > 5.0F) return false; // Too hard (Obsidian)
+		
+		// Don't break inventories, we want to steal from them!
+		if (this.world.getTileEntity(pos) != null) return false;
+		
+		if (block == net.minecraft.init.Blocks.IRON_DOOR || state.getMaterial().blocksMovement()) {
+			boolean canGrief = net.minecraftforge.event.ForgeEventFactory.getMobGriefingEvent(this.world, this);
+			if (!canGrief) return false;
+
+			// Play breaking sound/particles
+			this.world.playEvent(2001, pos, net.minecraft.block.Block.getStateId(state));
+			this.world.destroyBlock(pos, true);
+			return true;
+		}
+		return false;
+	}
 }

@@ -167,7 +167,7 @@ public class BlockLootBag extends BlockContainer {
 				ItemStack toAdd = heldItem.copy();
 				if (lootBag.addItem(toAdd)) {
 					// Successfully added
-					heldItem.shrink(toAdd.getCount());
+					heldItem.shrink(heldItem.getCount()); // It completely consumed the stack
 					playerIn.sendMessage(new TextComponentTranslation("message.thieves.loot_bag.added", toAdd.getDisplayName()));
 					return true;
 				} else {
@@ -181,7 +181,7 @@ public class BlockLootBag extends BlockContainer {
 	}
 
 	@Override
-	public void onBlockHarvested(World worldIn, BlockPos pos, IBlockState state, EntityPlayer player) {
+	public void breakBlock(World worldIn, BlockPos pos, IBlockState state) {
 		if (!worldIn.isRemote) {
 			// Drop loot bag contents when broken
 			TileEntity te = worldIn.getTileEntity(pos);
@@ -192,23 +192,25 @@ public class BlockLootBag extends BlockContainer {
 						spawnAsEntity(worldIn, pos, stack);
 					}
 				}
+				// Unregister hideout when the block is physically broken
+				com.windanesz.thieves.world.ThiefStashManager manager = com.windanesz.thieves.world.ThiefStashManager.get(worldIn);
+				if (lootBag.isHideout()) {
+					manager.removeHideout(worldIn.provider.getDimension(), pos);
+					Thieves.LOGGER.info("Hideout at {} was destroyed and unregistered", pos);
+				}
+				// Also clean up if it was a stash
+				manager.removeStash(worldIn, pos);
 			}
-
-			// Also handle loot table if present
-			// //if (player.isCreative() && this.lootTable != null) {
-			// 	LootTable loottable = worldIn.getLootTableManager().getLootTableFromLocation(this.lootTable);
-			// 	LootContext.Builder lootcontext$builder = new LootContext.Builder((WorldServer) worldIn).withPlayer(player).withLuck(player.getLuck());
-
-			// 	for (ItemStack itemstack : loottable.generateLootForPools(worldIn.rand, lootcontext$builder.build())) {
-			// 		spawnAsEntity(worldIn, pos, itemstack);
-			// 	}
-			// }
 		}
-		super.onBlockHarvested(worldIn, pos, state, player);
+		super.breakBlock(worldIn, pos, state);
 	}
 
 	@Override
 	public List<ItemStack> getDrops(net.minecraft.world.IBlockAccess iBlockAccess, BlockPos pos, IBlockState state, int fortune) {
+		if (this.lootTable == null) {
+			return Collections.emptyList();
+		}
+		
 		if (!(iBlockAccess instanceof WorldServer) || ((WorldServer) iBlockAccess).isRemote) {
 			return Collections.emptyList();
 		}

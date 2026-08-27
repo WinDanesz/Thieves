@@ -192,11 +192,10 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 
 	@Override
 	public void startExecuting() {
+		carriedItems.clear(); // Ensure it's clean (Fix 3)
 		// Check if we started because we already have an item
 		if (!thief.getHeldItemOffhand().isEmpty() && !thiefHasLootBag()) {
-			if (carriedItems.isEmpty()) {
-				carriedItems.add(thief.getHeldItemOffhand());
-			}
+			carriedItems.add(thief.getHeldItemOffhand());
 			currentState = State.NAVIGATING_TO_BAG;
 		} else {
 			currentState = State.NAVIGATING_TO_CHEST;
@@ -271,12 +270,20 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 		} else {
 			// Navigate to position in front of chest
 			double speed = getStealingSpeed();
-			thief.getNavigator().tryMoveToXYZ(
+			boolean pathFound = thief.getNavigator().tryMoveToXYZ(
 				targetPos.x,
 				targetPos.y,
 				targetPos.z,
 				speed
 			);
+			
+			// If pathing fails or completes but we aren't there, and it's a master thief, force walking in straight line
+			// This causes them to collide with walls and trigger their breach logic.
+			if (thief instanceof EntityMasterThief && ((EntityMasterThief)thief).canBreach()) {
+				if (!pathFound || thief.getNavigator().noPath()) {
+					thief.getMoveHelper().setMoveTo(targetPos.x, targetPos.y, targetPos.z, speed);
+				}
+			}
 		}
 	}
 
@@ -298,6 +305,7 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			if (success && !carriedItems.isEmpty()) {
 				// Hold the first stolen item in offhand
 				thief.setHeldItem(EnumHand.OFF_HAND, carriedItems.get(0).copy());
+				thief.setDropChance(net.minecraft.inventory.EntityEquipmentSlot.OFFHAND, 0.0F);
 				// Successfully extracted, now navigate to bag
 				currentState = State.NAVIGATING_TO_BAG;
 			} else {
@@ -373,21 +381,6 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 		return nearest;
 	}
 
-	private BlockPos findNearestAccessibleChest() {
-		List<BlockPos> chests = scanForChests();
-
-		if (chests.isEmpty()) {
-			return null;
-		}
-
-		// Master thieves prioritize valuable items
-		if (thief instanceof EntityMasterThief) {
-			return findChestWithValuableItems(chests);
-		}
-
-		// Regular thieves pick random chest
-		return chests.get(random.nextInt(chests.size()));
-	}
 
 	private List<BlockPos> scanForChests() {
 		List<BlockPos> chests = new ArrayList<>();
@@ -398,12 +391,9 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 			if (Math.abs(te.getPos().getY() - thiefPos.getY()) <= 8) {
 				double distSq = te.getDistanceSq(thiefPos.getX(), thiefPos.getY(), thiefPos.getZ());
 				if (distSq <= searchRadiusSq) {
-					if (te instanceof TileEntityChest) {
-						net.minecraft.block.Block blockType = te.getBlockType();
-						if (blockType == Blocks.CHEST || blockType == Blocks.TRAPPED_CHEST) {
-							if (hasAccessibleItems((IInventory) te)) {
-								chests.add(te.getPos());
-							}
+					if (PlayerBaseDetector.isValidInventory(te)) {
+						if (hasAccessibleItems(te)) {
+							chests.add(te.getPos());
 						}
 					}
 				}
@@ -413,39 +403,129 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 		return chests;
 	}
 
-	private BlockPos findChestWithValuableItems(List<BlockPos> chests) {
+	private BlockPos findNearestAccessibleChest() {
+		List<BlockPos> chests = scanForChests();
+
+		if (chests.isEmpty()) {
+			return null;
+		}
+
 		BlockPos bestChest = null;
-		float bestValue = 0.0F;
+		float bestScore = -Float.MAX_VALUE;
+		boolean isMaster = thief instanceof EntityMasterThief;
 
 		for (BlockPos chestPos : chests) {
 			TileEntity te = world.getTileEntity(chestPos);
-			if (te instanceof IInventory) {
-				float value = calculateChestValue((IInventory) te);
-				if (value > bestValue) {
-					bestValue = value;
-					bestChest = chestPos;
+			if (te == null) continue;
+
+			float score = 0.0F;
+
+			// 1. Capacity Base Score (larger inventories = more appealing)
+			int slots = getSlotCount(te);
+			score += slots * 2.0F;
+
+			// 2. Exact vs Estimated Value
+			if (isMaster) {
+				// Master thieves have X-ray vision and know exactly what is inside
+				score += calculateExactValue(te) * 5.0F;
+			} else {
+				// Regular thieves just look at how full the container is
+				score += calculateEstimatedValue(te) * 3.0F;
+			}
+
+			// 3. Density/Cluster Bonus (highly appealing if surrounded by other containers)
+			int neighbors = 0;
+			for (BlockPos otherPos : chests) {
+				if (otherPos != chestPos && chestPos.distanceSq(otherPos) <= 25.0D) { // Within 5 blocks
+					neighbors++;
 				}
+			}
+			score += neighbors * 15.0F;
+
+			// 4. Distance Penalty (prefer closer targets if values are similar)
+			double distSq = thief.getDistanceSq(chestPos);
+			score -= (float) Math.sqrt(distSq) * 1.5F;
+
+			// 5. Random Noise (prevents all thieves from swarming the exact same chest simultaneously)
+			score += random.nextFloat() * 10.0F;
+
+			if (score > bestScore) {
+				bestScore = score;
+				bestChest = chestPos;
 			}
 		}
 
-		return bestChest != null ? bestChest : (chests.isEmpty() ? null : chests.get(0));
+		return bestChest != null ? bestChest : chests.get(random.nextInt(chests.size()));
 	}
 
-	private float calculateChestValue(IInventory inventory) {
+	private int getSlotCount(TileEntity te) {
+		if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+			net.minecraftforge.items.IItemHandler handler = te.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+			return handler != null ? handler.getSlots() : 0;
+		} else if (te instanceof IInventory) {
+			return ((IInventory) te).getSizeInventory();
+		}
+		return 0;
+	}
+
+	private float calculateEstimatedValue(TileEntity te) {
+		int filled = 0;
+		if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+			net.minecraftforge.items.IItemHandler handler = te.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+			if (handler != null) {
+				for (int i = 0; i < handler.getSlots(); i++) {
+					if (!handler.getStackInSlot(i).isEmpty()) filled++;
+				}
+			}
+		} else if (te instanceof IInventory) {
+			IInventory inventory = (IInventory) te;
+			for (int i = 0; i < inventory.getSizeInventory(); i++) {
+				if (!inventory.getStackInSlot(i).isEmpty()) filled++;
+			}
+		}
+		return filled; // Points per filled slot
+	}
+
+	private float calculateExactValue(TileEntity te) {
 		float totalValue = 0.0F;
-		for (int i = 0; i < inventory.getSizeInventory(); i++) {
-			ItemStack stack = inventory.getStackInSlot(i);
-			if (!stack.isEmpty()) {
-				totalValue += PlayerBaseDetector.getItemValue(stack);
+		if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+			net.minecraftforge.items.IItemHandler handler = te.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+			if (handler != null) {
+				for (int i = 0; i < handler.getSlots(); i++) {
+					ItemStack stack = handler.getStackInSlot(i);
+					if (!stack.isEmpty()) {
+						totalValue += PlayerBaseDetector.getItemValue(stack);
+					}
+				}
+			}
+		} else if (te instanceof IInventory) {
+			IInventory inventory = (IInventory) te;
+			for (int i = 0; i < inventory.getSizeInventory(); i++) {
+				ItemStack stack = inventory.getStackInSlot(i);
+				if (!stack.isEmpty()) {
+					totalValue += PlayerBaseDetector.getItemValue(stack);
+				}
 			}
 		}
 		return totalValue;
 	}
 
-	private boolean hasAccessibleItems(IInventory inventory) {
-		for (int i = 0; i < inventory.getSizeInventory(); i++) {
-			if (!inventory.getStackInSlot(i).isEmpty()) {
-				return true;
+	private boolean hasAccessibleItems(TileEntity te) {
+		if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+			net.minecraftforge.items.IItemHandler handler = te.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+			if (handler != null) {
+				for (int i = 0; i < handler.getSlots(); i++) {
+					if (!handler.getStackInSlot(i).isEmpty()) {
+						return true;
+					}
+				}
+			}
+		} else if (te instanceof IInventory) {
+			IInventory inventory = (IInventory) te;
+			for (int i = 0; i < inventory.getSizeInventory(); i++) {
+				if (!inventory.getStackInSlot(i).isEmpty()) {
+					return true;
+				}
 			}
 		}
 		return false;
@@ -453,38 +533,64 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 
 	private boolean extractItemsFromChest() {
 		TileEntity te = world.getTileEntity(targetChestPos);
-		if (!(te instanceof IInventory)) {
+		if (te == null) {
 			return false;
 		}
 
-		IInventory inventory = (IInventory) te;
-		
-		// Find a random occupied slot
-		List<Integer> occupiedSlots = new ArrayList<>();
-		for (int i = 0; i < inventory.getSizeInventory(); i++) {
-			if (!inventory.getStackInSlot(i).isEmpty()) {
-				occupiedSlots.add(i);
+		if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+			net.minecraftforge.items.IItemHandler handler = te.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+			if (handler != null) {
+				List<Integer> occupiedSlots = new ArrayList<>();
+				for (int i = 0; i < handler.getSlots(); i++) {
+					if (!handler.getStackInSlot(i).isEmpty() && !handler.extractItem(i, 1, true).isEmpty()) {
+						occupiedSlots.add(i);
+					}
+				}
+
+				if (occupiedSlots.isEmpty()) {
+					return false;
+				}
+
+				int slot = occupiedSlots.get(random.nextInt(occupiedSlots.size()));
+				ItemStack stack = handler.getStackInSlot(slot);
+				int maxExtract = thief instanceof EntityMasterThief ? 16 : 8;
+				int extractCount = Math.min(stack.getCount(), 1 + random.nextInt(maxExtract));
+				
+				ItemStack extracted = handler.extractItem(slot, extractCount, false);
+				if (!extracted.isEmpty()) {
+					carriedItems.add(extracted);
+					te.markDirty();
+					return true;
+				}
+				return false;
 			}
 		}
 
-		if (occupiedSlots.isEmpty()) {
-			return false;
+		if (te instanceof IInventory) {
+			IInventory inventory = (IInventory) te;
+			List<Integer> occupiedSlots = new ArrayList<>();
+			for (int i = 0; i < inventory.getSizeInventory(); i++) {
+				if (!inventory.getStackInSlot(i).isEmpty()) {
+					occupiedSlots.add(i);
+				}
+			}
+
+			if (occupiedSlots.isEmpty()) {
+				return false;
+			}
+
+			int slot = occupiedSlots.get(random.nextInt(occupiedSlots.size()));
+			ItemStack stack = inventory.getStackInSlot(slot);
+			int maxExtract = thief instanceof EntityMasterThief ? 16 : 8;
+			int extractCount = Math.min(stack.getCount(), 1 + random.nextInt(maxExtract));
+			
+			ItemStack extracted = stack.splitStack(extractCount);
+			carriedItems.add(extracted);
+			inventory.markDirty();
+			return true;
 		}
 
-		// Pick random slot
-		int slot = occupiedSlots.get(random.nextInt(occupiedSlots.size()));
-		ItemStack stack = inventory.getStackInSlot(slot);
-
-		// Extract 1-8 items (or full stack if smaller)
-		int maxExtract = thief instanceof EntityMasterThief ? 16 : 8;
-		int extractCount = Math.min(stack.getCount(), 1 + random.nextInt(maxExtract));
-		
-		ItemStack extracted = stack.splitStack(extractCount);
-		carriedItems.add(extracted);
-
-		inventory.markDirty();
-
-		return true;
+		return false;
 	}
 
 	private void depositItemsInBag() {
@@ -503,7 +609,11 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 	}
 
 	private boolean isValidLootBag(BlockPos pos) {
-		return world.getBlockState(pos).getBlock() == ModBlocks.LOOT_BAG;
+		TileEntity te = world.getTileEntity(pos);
+		if (te instanceof TileEntityLootBag) {
+			return !((TileEntityLootBag) te).isHideout();
+		}
+		return false;
 	}
 
 	private boolean hasReachedThiefLimit(BlockPos pos) {
@@ -529,7 +639,11 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 
 	private Vec3d getPositionInFrontOfChest(BlockPos chestPos) {
 		// Get the chest's facing direction
-		EnumFacing facing = world.getBlockState(chestPos).getValue(net.minecraft.block.BlockChest.FACING);
+		net.minecraft.block.state.IBlockState state = world.getBlockState(chestPos);
+		EnumFacing facing = EnumFacing.NORTH; // default
+		if (state.getBlock() instanceof net.minecraft.block.BlockChest) {
+			facing = state.getValue(net.minecraft.block.BlockChest.FACING);
+		}
 		
 		// Calculate position 1.5 blocks in front of the chest
 		BlockPos frontPos = chestPos.offset(facing, 1);
@@ -549,8 +663,8 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 				// Increment the numPlayersUsing counter to open the chest visually
 				world.addBlockEvent(targetChestPos, chest.getBlockType(), 1, 1);
 				world.notifyNeighborsOfStateChange(targetChestPos, chest.getBlockType(), false);
-				chestOpened = true;
 			}
+			chestOpened = true;
 		}
 	}
 
@@ -562,8 +676,8 @@ public class ThiefAIStealToLootBag extends EntityAIBase {
 				// Decrement the numPlayersUsing counter to close the chest visually
 				world.addBlockEvent(targetChestPos, chest.getBlockType(), 1, 0);
 				world.notifyNeighborsOfStateChange(targetChestPos, chest.getBlockType(), false);
-				chestOpened = false;
 			}
+			chestOpened = false;
 		}
 	}
 

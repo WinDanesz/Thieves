@@ -63,7 +63,11 @@ public class ThiefAISeekChestAndSignal extends EntityAIBase {
     public boolean shouldContinueExecuting() {
         if (signaled || thief.getRobberyLootBagPos() != null) return false;
         long timeoutTicks = 20 * Settings.robbery.robberyTimeout;
-        if (world.getTotalWorldTime() - startTime > timeoutTicks) return false;
+        if (world.getTotalWorldTime() - startTime > timeoutTicks) {
+            com.windanesz.thieves.Thieves.LOGGER.info("Thief at {} timed out while seeking chest, despawning.", thief.getPosition());
+            thief.setDead();
+            return false;
+        }
         return !thief.getNavigator().noPath();
     }
 

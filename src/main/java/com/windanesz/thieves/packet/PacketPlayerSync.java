@@ -15,9 +15,7 @@ public class PacketPlayerSync implements IMessageHandler<PacketPlayerSync.Messag
 	public IMessage onMessage(Message message, MessageContext ctx) {
 		// Just to make sure that the side is correct
 		if (ctx.side.isClient()) {
-			// Using a fully qualified name is a good course of action here; we don't really want to clutter the proxy
-			// methods any more than necessary.
-			net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> Thieves.proxy.handlePlayerSyncPacket(message));
+			Thieves.proxy.handlePlayerSyncPacket(message);
 		}
 
 		return null;

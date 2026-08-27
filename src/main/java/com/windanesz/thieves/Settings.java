@@ -25,13 +25,16 @@ public class Settings {
 	@Config.Name("Loot Bag Settings")
 	@Config.LangKey("settings." + Thieves.MODID + ":loot_bag_settings")
 	public static LootBagSettings lootBag = new LootBagSettings();
+	@Config.Name("Inventory Detection Settings")
+	@Config.LangKey("settings." + Thieves.MODID + ":inventory_detection_settings")
+	public static InventoryDetectionSettings inventoryDetection = new InventoryDetectionSettings();
 
 	public static ResourceLocation[] toResourceLocations(String... strings) {
 		return Arrays.stream(strings).filter(s -> s != null && !s.trim().isEmpty()).map(s -> new ResourceLocation(s.toLowerCase(Locale.ROOT).trim())).toArray(ResourceLocation[]::new);
 	}
 
 	public static class RobberySettings {
-		@Config.Comment("Distance from loot bag where thieves spawn during a robbery (blocks)")
+		@Config.Comment("Distance from the player's base where thieves spawn at the start of a robbery (blocks)")
 		@Config.RangeInt(min = 1, max = 32)
 		public int thiefSpawnDistance = 4;
 		
@@ -153,6 +156,14 @@ public class Settings {
 
 		@Config.Comment("Should loot bag spill contents when broken")
 		public boolean spillOnBreak = true;
+	}
+
+	public static class InventoryDetectionSettings {
+		@Config.Comment("List of block registry names to ignore when thieves look for loot (e.g. 'minecraft:furnace').")
+		public String[] inventoryBlacklist = new String[]{};
+
+		@Config.Comment("If true, the blacklist acts as a whitelist instead. Only blocks on the list will be stolen from.")
+		public boolean useWhitelistMode = false;
 	}
 
 	@SuppressWarnings("unused")

@@ -172,7 +172,7 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 						break;
 					}
 				}
-				inventory.setStackInSlot(i, ItemStack.EMPTY);
+				inventory.setStackInSlot(i, stack); // Safe: sets to EMPTY if fully consumed
 			}
 		}
 	}
@@ -212,6 +212,9 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 	 */
 	public void setAsHideout(boolean hideout) {
 		this.isHideout = hideout;
+		if (hideout && this.spawnCooldown <= 0) {
+			this.spawnCooldown = 200; // 10 second grace period
+		}
 		markDirty();
 	}
 	
@@ -247,12 +250,14 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 		}
 		
 		// Hideout proximity spawning logic
-		if (isHideout && spawnCooldown > 0) {
-			spawnCooldown--;
-		}
-		
-		if (isHideout && spawnCooldown <= 0) {
-			checkForPlayerProximityAndSpawn();
+		if (isHideout) {
+			if (spawnCooldown > 0) {
+				spawnCooldown--;
+			} else {
+				if (world.getTotalWorldTime() % 20 == 0) {
+					checkForPlayerProximityAndSpawn();
+				}
+			}
 		}
 	}
 	
@@ -277,6 +282,7 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 			
 			// Set cooldown: 5-10 minutes (6000-12000 ticks)
 			spawnCooldown = 6000 + random.nextInt(6000);
+			this.markDirty();
 			
 			Thieves.LOGGER.info("Hideout at {} spawned {} thieves. Cooldown: {} ticks", pos, thievesToSpawn, spawnCooldown);
 		}
@@ -353,22 +359,9 @@ public class TileEntityLootBag extends TileEntity implements ITickable {
 		if (compound.hasKey("inventory")) {
 			inventory.deserializeNBT(compound.getCompoundTag("inventory"));
 		}
-		readyForPickup = compound.getBoolean("readyForPickup");
+		updateReadyForPickup(); // Recompute instead of relying on stale NBT
 		isHideout = compound.getBoolean("isHideout");
 		successfulRaids = compound.getInteger("successfulRaids");
 		spawnCooldown = compound.getInteger("spawnCooldown");
 	}
-	
-	@Override
-	public void invalidate() {
-		super.invalidate();
-		
-		// If this was a hideout, unregister it from the world data
-		if (isHideout && world != null && !world.isRemote) {
-			ThiefStashManager manager = ThiefStashManager.get(world);
-			manager.removeHideout(world.provider.getDimension(), pos);
-			Thieves.LOGGER.info("Hideout at {} was destroyed and unregistered", pos);
-		}
-	}
 }
-

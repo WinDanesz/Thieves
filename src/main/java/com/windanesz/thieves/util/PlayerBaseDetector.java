@@ -167,11 +167,10 @@ public class PlayerBaseDetector {
 	public static List<BlockPos> scanForChests(World world, BlockPos center, int radius) {
 		List<BlockPos> chestLocations = new ArrayList<>();
 
-		int chunkRadius = radius;
 		ChunkPos centerChunk = new ChunkPos(center);
 
-		for (int chunkX = centerChunk.x - chunkRadius; chunkX <= centerChunk.x + chunkRadius; chunkX++) {
-			for (int chunkZ = centerChunk.z - chunkRadius; chunkZ <= centerChunk.z + chunkRadius; chunkZ++) {
+		for (int chunkX = centerChunk.x - radius; chunkX <= centerChunk.x + radius; chunkX++) {
+			for (int chunkZ = centerChunk.z - radius; chunkZ <= centerChunk.z + radius; chunkZ++) {
 				if (!world.isChunkGeneratedAt(chunkX, chunkZ)) {
 					continue; // Skip ungenerated chunks
 				}
@@ -187,17 +186,50 @@ public class PlayerBaseDetector {
 	}
 
 	/**
-	 * Scans a single chunk for chest tile entities.
+	 * Checks if a tile entity is a valid inventory target (supports IInventory and IItemHandler).
+	 */
+	public static boolean isValidInventory(TileEntity te) {
+		if (te == null) {
+			return false;
+		}
+
+		// Don't steal from our own loot bags
+		if (te instanceof com.windanesz.thieves.block.TileEntityLootBag) {
+			return false;
+		}
+
+		net.minecraft.block.Block block = te.getWorld().getBlockState(te.getPos()).getBlock();
+		net.minecraft.util.ResourceLocation regName = block.getRegistryName();
+		if (regName != null) {
+			String name = regName.toString();
+			boolean inList = false;
+			for (String s : Settings.inventoryDetection.inventoryBlacklist) {
+				if (s.equals(name)) {
+					inList = true;
+					break;
+				}
+			}
+			if (Settings.inventoryDetection.useWhitelistMode) {
+				if (!inList) return false;
+			} else {
+				if (inList) return false;
+			}
+		}
+
+		if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+			return true;
+		}
+
+		return te instanceof IInventory;
+	}
+
+	/**
+	 * Scans a single chunk for valid inventory tile entities.
 	 */
 	private static void scanChunkForChests(World world, int chunkX, int chunkZ, List<BlockPos> chestLocations) {
-		// Iterate through all tile entities in the chunk
 		for (TileEntity te : world.getChunk(chunkX, chunkZ).getTileEntityMap().values()) {
-			if (te instanceof TileEntityChest || te instanceof IInventory) {
-				// Check if it's actually a chest block (not just any inventory)
-				if (world.getBlockState(te.getPos()).getBlock() == Blocks.CHEST || 
-					world.getBlockState(te.getPos()).getBlock() == Blocks.TRAPPED_CHEST) {
-					chestLocations.add(te.getPos());
-				}
+			if (isValidInventory(te)) {
+				chestLocations.add(te.getPos());
 			}
 		}
 	}
@@ -210,12 +242,24 @@ public class PlayerBaseDetector {
 
 		for (BlockPos pos : chestLocations) {
 			TileEntity te = world.getTileEntity(pos);
-			if (te instanceof IInventory) {
-				IInventory inventory = (IInventory) te;
-				for (int i = 0; i < inventory.getSizeInventory(); i++) {
-					ItemStack stack = inventory.getStackInSlot(i);
-					if (!stack.isEmpty()) {
-						totalValue += getItemValue(stack);
+			if (te != null) {
+				if (te.hasCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null)) {
+					net.minecraftforge.items.IItemHandler handler = te.getCapability(net.minecraftforge.items.CapabilityItemHandler.ITEM_HANDLER_CAPABILITY, null);
+					if (handler != null) {
+						for (int i = 0; i < handler.getSlots(); i++) {
+							ItemStack stack = handler.getStackInSlot(i);
+							if (!stack.isEmpty()) {
+								totalValue += getItemValue(stack);
+							}
+						}
+					}
+				} else if (te instanceof IInventory) {
+					IInventory inventory = (IInventory) te;
+					for (int i = 0; i < inventory.getSizeInventory(); i++) {
+						ItemStack stack = inventory.getStackInSlot(i);
+						if (!stack.isEmpty()) {
+							totalValue += getItemValue(stack);
+						}
 					}
 				}
 			}
@@ -260,8 +304,10 @@ public class PlayerBaseDetector {
 			value *= Settings.itemValues.enchantedMultiplier;
 		}
 
-		// Multiply by stack size (with diminishing returns to prevent exploit)
-		value *= Math.min(stack.getCount(), 16) / 16.0F;
+		// Multiply by stack size with a diminishing-returns cap.
+		// A count of 1 = 1x value, 16 or more = 16x value (max).
+		// Previously divided by 16 here which made single items worth ~6% of their intended value.
+		value *= Math.min(stack.getCount(), 16);
 
 		return value;
 	}

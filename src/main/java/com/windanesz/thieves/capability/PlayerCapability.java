@@ -137,6 +137,29 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 		long hash = ChunkPos.asLong(pos.x, pos.z);
 		chunkVisits.put(hash, chunkVisits.getOrDefault(hash, 0) + 1);
 		chunkVisitTimestamps.putIfAbsent(hash, worldTime);
+		
+		if (chunkVisits.size() > 100) {
+			pruneOldVisits();
+		}
+	}
+
+	private void pruneOldVisits() {
+		java.util.List<Long> keys = new java.util.ArrayList<>(chunkVisits.keySet());
+		keys.sort((k1, k2) -> {
+			int count1 = chunkVisits.get(k1);
+			int count2 = chunkVisits.get(k2);
+			if (count1 != count2) {
+				return Integer.compare(count2, count1); // higher count first
+			}
+			long time1 = chunkVisitTimestamps.getOrDefault(k1, 0L);
+			long time2 = chunkVisitTimestamps.getOrDefault(k2, 0L);
+			return Long.compare(time2, time1); // newer first
+		});
+		
+		for (int i = 50; i < keys.size(); i++) {
+			chunkVisits.remove(keys.get(i));
+			chunkVisitTimestamps.remove(keys.get(i));
+		}
 	}
 
 	/**
@@ -237,12 +260,25 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 	}
 
 	/**
-	 * Marks that a robbery has been completed.
+	 * Called the moment a robbery begins (thieves have spawned).
+	 * Stamps lastRobberyTime and resets progress immediately so that if the
+	 * world closes mid-robbery, canTriggerRobbery() won't fire again on reload
+	 * before the cooldown expires.
+	 */
+	public void startRobbery(World world) {
+		lastRobberyTime = world.getTotalWorldTime();
+		resetRobberyProgress();
+		sync();
+	}
+
+	/**
+	 * Called when a robbery succeeds (loot bag picked up and thieves escape).
+	 * Increments the completed robbery counter which controls difficulty scaling.
 	 */
 	public void completeRobbery(World world) {
 		completedRobberies++;
-		lastRobberyTime = world.getTotalWorldTime();
-		resetRobberyProgress();
+		// lastRobberyTime was already stamped in startRobbery(); no need to reset here.
+		sync();
 	}
 
 	/**
@@ -263,6 +299,7 @@ public class PlayerCapability implements INBTSerializable<NBTTagCompound> {
 		// Copy base detection data
 		this.baseLocation = data.baseLocation;
 		this.baseDimension = data.baseDimension;
+		this.manuallySetBase = data.manuallySetBase;
 		this.chunkVisits = new java.util.HashMap<>(data.chunkVisits);
 		this.chunkVisitTimestamps = new java.util.HashMap<>(data.chunkVisitTimestamps);
 		this.chestCountAtBase = data.chestCountAtBase;

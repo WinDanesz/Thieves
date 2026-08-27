@@ -71,11 +71,13 @@ public class ClientProxy extends CommonProxy {
 
 	@Override
 	public void handlePlayerSyncPacket(PacketPlayerSync.Message message) {
-		PlayerCapability data = PlayerCapability.get(Minecraft.getMinecraft().player);
+		Minecraft.getMinecraft().addScheduledTask(() -> {
+			PlayerCapability data = PlayerCapability.get(Minecraft.getMinecraft().player);
 
-		if (data != null) {
-			data.robberyProgress = message.robberyProgress;
-			data.completedRobberies = message.completedRobberies;
-		}
+			if (data != null) {
+				data.robberyProgress = message.robberyProgress;
+				data.completedRobberies = message.completedRobberies;
+			}
+		});
 	}
 }

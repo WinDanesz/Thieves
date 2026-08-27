@@ -76,17 +76,11 @@ public class ThiefAIEscortToHideout extends EntityAIBase {
 	
 	@Override
 	public boolean shouldContinueExecuting() {
-		// Stop if we acquired a loot bag
-		if (hasLootBag()) {
-			return false;
-		}
+		if (thief.isDead) return false;
+		if (hasLootBag()) return false;
+		if (thief.isEscaping()) return false;
+		if (thiefToFollow != null && (thiefToFollow.isDead || !thiefToFollow.isEntityAlive())) return false;
 		
-		// Stop if we started escaping
-		if (thief.isEscaping()) {
-			return false;
-		}
-		
-		// Continue until we reach hideout or despawn
 		return true;
 	}
 	

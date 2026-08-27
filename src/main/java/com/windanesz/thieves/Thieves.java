@@ -64,6 +64,11 @@ public class Thieves implements ForgeChunkManager.LoadingCallback {
 
 	@Override
 	public void ticketsLoaded(List<ForgeChunkManager.Ticket> tickets, World world) {
+		// Robberies are transient — they do not survive server restarts. Any chunk
+		// tickets that persist across a restart belong to a robbery that is no
+		// longer tracked, so we release them immediately rather than trying to
+		// reassociate them. Thieves that were alive will simply be loaded normally
+		// by player proximity on the next login.
 		for (ForgeChunkManager.Ticket ticket : tickets) {
 			ForgeChunkManager.releaseTicket(ticket);
 		}

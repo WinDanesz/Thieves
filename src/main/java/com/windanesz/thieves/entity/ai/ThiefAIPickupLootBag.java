@@ -28,6 +28,10 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 	private static final int BAG_SEARCH_RADIUS = 32;
 	private static final int PICKUP_TIME = 30; // 1.5 seconds to pick up
 
+	private int searchCooldown = 0;
+	
+	private static final int SEARCH_INTERVAL = 20;
+
 	public ThiefAIPickupLootBag(EntityThief thief) {
 		this.thief = thief;
 		this.world = thief.world;
@@ -36,6 +40,13 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 
 	@Override
 	public boolean shouldExecute() {
+		// Add cooldown to prevent scanning every tick
+		if (searchCooldown > 0) {
+			searchCooldown--;
+			return false;
+		}
+		searchCooldown = SEARCH_INTERVAL;
+
 		// Check if thief already has a loot bag
 		if (hasLootBag()) {
 			return false;
@@ -82,9 +93,9 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 			thief.getVerticalFaceSpeed()
 		);
 
-		double distance = thief.getDistanceSq(targetBagPos);
+		double distanceSq = thief.getDistanceSq(targetBagPos);
 
-		if (distance < 4.0D) {
+		if (distanceSq < 4.0D) {
 			// Close enough, start pickup
 			thief.getNavigator().clearPath();
 			pickupTimer++;
@@ -106,28 +117,27 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 	}
 
 	private BlockPos findFullLootBag() {
-		BlockPos thiefPos = thief.getPosition();
-
-		for (int x = -BAG_SEARCH_RADIUS; x <= BAG_SEARCH_RADIUS; x++) {
-			for (int z = -BAG_SEARCH_RADIUS; z <= BAG_SEARCH_RADIUS; z++) {
-				for (int y = -8; y <= 8; y++) {
-					BlockPos checkPos = thiefPos.add(x, y, z);
-					
-					if (isValidFullLootBag(checkPos)) {
-						return checkPos;
+		BlockPos nearest = null;
+		double bestDistSq = Double.MAX_VALUE;
+		double maxDistSq = BAG_SEARCH_RADIUS * BAG_SEARCH_RADIUS;
+		
+		for (TileEntity te : world.loadedTileEntityList) {
+			if (te instanceof TileEntityLootBag) {
+				TileEntityLootBag lootBag = (TileEntityLootBag) te;
+				if (!lootBag.isHideout() && lootBag.isReadyForPickup()) {
+					double distSq = thief.getDistanceSq(te.getPos());
+					if (distSq <= maxDistSq && distSq < bestDistSq) {
+						bestDistSq = distSq;
+						nearest = te.getPos();
 					}
 				}
 			}
 		}
-
-		return null;
+		
+		return nearest;
 	}
 
 	private boolean isValidFullLootBag(BlockPos pos) {
-		if (world.getBlockState(pos).getBlock() != ModBlocks.LOOT_BAG) {
-			return false;
-		}
-
 		TileEntity te = world.getTileEntity(pos);
 		if (!(te instanceof TileEntityLootBag)) {
 			return false;
@@ -156,6 +166,7 @@ public class ThiefAIPickupLootBag extends EntityAIBase {
 
 		// Give to thief (in offhand)
 		thief.setItemStackToSlot(EntityEquipmentSlot.OFFHAND, bagItem);
+		thief.setDropChance(EntityEquipmentSlot.OFFHAND, 2.0F); // Ensure it drops 100% of the time
 
 		// Remove block
 		world.setBlockToAir(targetBagPos);
